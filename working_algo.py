@@ -83,7 +83,7 @@ def rolling_sum(df, weight, window_size, genomic_pos):
 
 #%%
 #Full data trial
-read_number = 40
+read_number = 30
 read_size = 400
 window_size = 400
 # priorities = []
@@ -122,6 +122,17 @@ for run in tqdm(range(0,read_number)):
     full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = 0 # set the weight of the covered positions to 0
     weight_window_sum = rolling_sum(full_data, 'weight', 400, full_data['genome_pos'].tolist())
 
+#%%
+# out put covered position into a bed file
+bed_file_path = "intervals.bed"
+
+with open(bed_file_path, "w") as bed_file:
+    for interval in covered_ranges:
+        start = interval[0]
+        end = interval[1]
+        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
+        bed_file.write(bed_line)
+        
 #%% checking
 full_data[(full_data['genome_pos']>=761004) & (full_data['genome_pos']<761284)]
 full_data[full_data['genome_pos']<400]
