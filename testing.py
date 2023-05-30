@@ -56,9 +56,9 @@ with open(bed_file_path, "r") as bed_file:
 destination_df = pd.DataFrame()
 
 for interval in intervals:
-    segment = full_data[(full_data['genome_pos']>= interval[0])&(full_data['genome_pos']<= interval[0])]
+    segment = full_data[(full_data['genome_pos']>= interval[0])&(full_data['genome_pos']<= interval[1])]
     destination_df = pd.concat([destination_df, segment])
-
+destination_df = destination_df.drop_duplicates(keep='first')
 
 # %%
 destination_df['gene'].value_counts()
