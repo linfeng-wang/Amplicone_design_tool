@@ -42,7 +42,8 @@ full_data['weight'] = full_data['freq']
 # merged_data = merged_data.sort_values(by=['genome_pos'])
 # merged_data = merged_data.reset_index(drop=True)
 # merged_data['weight'].fillna(value=0, inplace=True)
-bed_file_path = "intervals.bed"
+bed_file_path = "intervals1kbps.bed"
+# bed_file_path = "intervals400bps.bed"
 intervals = []
 
 with open(bed_file_path, "r") as bed_file:
@@ -51,7 +52,7 @@ with open(bed_file_path, "r") as bed_file:
         start = int(line[1])
         end = int(line[2])
         intervals.append([start, end])
-#%%
+
 # Print the intervals
 destination_df = pd.DataFrame()
 
@@ -60,21 +61,10 @@ for interval in intervals:
     destination_df = pd.concat([destination_df, segment])
 destination_df = destination_df.drop_duplicates(keep='first')
 
-# %%
-destination_df['gene'].value_counts()
-
-# %%
-full_data['gene'].value_counts()
-
-# %%
 for i, x in full_data['gene'].value_counts().items():
     if i in destination_df['gene'].value_counts().keys():
         print(i, np.round(destination_df['gene'].value_counts()[i]/full_data['gene'].value_counts()[i],2))
     else:
         print(i, 0)
-        
 
-#%%
-for i, x in destination_df['gene'].value_counts().items():
-    print(i,x)
 # %%
