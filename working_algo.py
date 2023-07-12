@@ -1,3 +1,5 @@
+#here I would try to gather al paddings together and make new genome
+
 #%%
 from functools import partial
 from random import choices, randint, randrange, random, sample
@@ -11,9 +13,12 @@ import time
 from Bio.SeqUtils import MeltingTemp
 from Bio import SeqIO
 from plotly import graph_objects as go
-import primer_selection
+import json
 from imp import reload
+import primer_selection
 reload(primer_selection)
+import testing
+reload(testing)
 #%%
 def value_counts_list(lst):
     """
@@ -138,9 +143,9 @@ def rolling_sum(df, weight, window_size, genomic_pos):
 # full_data['weight'].min()
 #%%
 #Full data trial
-read_number = 40
+read_number = 30
 read_size = 1000
-window_size = read_size
+window_size = read_size-150
 # priorities = []
 graph_output = False # set to True to see the graph output
 weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
@@ -212,17 +217,10 @@ for run in tqdm(range(0,read_number)):
     weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
 #! full data needs to be reloaded after each run
 #%%
-# output covered position into a bed file
-bed_file_path = "intervals1kbps.bed"
-
-with open(bed_file_path, "w") as bed_file:
-    for interval in covered_ranges:
-        start = interval[0]
-        end = interval[1]
-        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
-        bed_file.write(bed_line)
-
+# output
+new_genome = ''
 seq = 1
+padding = 250
 accepted_primers = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
 primer_pool = []
 for i, x in enumerate(covered_ranges):
@@ -238,11 +236,105 @@ for i, x in enumerate(covered_ranges):
     if (high_b - low_b) < 350:
         # print('======')
         high_b+= 450
-    seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b)
-        
+
+    seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
+    new_genome = new_genome + seq_template[0:padding] + seq_template[padding:]
+    
+#%%
+    # print(low_b, high_b)
     # print(seq_template)
     # print(x)
-    primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, low_b)
+    primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, low_b, high_b)
+    # print(accepted_primers)
+    primer_pos = accepted_primers.iloc[-1][['pLeft_coord','pRight_coord']].values
+    amplified_segment = full_data[(full_data['genome_pos']>= primer_pos[0])&(full_data['genome_pos']<= primer_pos[1])]
+    covered_segment = full_data[(full_data['genome_pos']>= low_b)&(full_data['genome_pos']<= high_b)]
+    # print('======')
+    # print(amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001))
+    # ratio = amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001)
+    # # if ratio < 0.85:
+        
+    # print('======')
+    
+    # if amplified_segment.shape[0]/covered_segment.shape[0] < 0.5:
+    #     print()
+    # break
+accepted_primers.to_csv(f'output/accepted_primers-{read_number}-{read_size}.csv')
+
+# output covered position info into a json file
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        return super(NpEncoder, self).default(obj)
+
+# output covered position proposed by the algorithm into a bed file
+bed_file_path = f"output/intervals-{read_number}-{read_size}_algoRange.bed"
+
+with open(bed_file_path, "w") as bed_file:
+    for start, end in covered_ranges:
+        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
+        bed_file.write(bed_line)
+
+# output coordinates as covered by primers into a bed file
+bed_file_path = f"output/intervals-{read_number}-{read_size}_primerRange.bed"
+
+with open(bed_file_path, "w") as bed_file:
+    for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
+        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
+        bed_file.write(bed_line)
+
+run = 0
+covered_positions = {}
+for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
+    # print(start, end)
+    covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','change','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
+    run+=1
+out_file = open(f"output/covered_positions-{read_number}-{read_size}.json", "w")
+
+json.dump(covered_positions, out_file, cls=NpEncoder, indent = 6)
+
+out_file.close()
+print(f'Output_file:{read_number}-{read_size}')
+
+testing.test_coverage(bed_file_path, full_data, tb_drug_resistance_genes.keys())
+
+
+
+#%%
+tb_genes = tb_drug_resistance_genes.keys()
+destination_df = pd.DataFrame(columns=full_data.columns)
+for interval in covered_ranges:
+    segment = full_data[(full_data['genome_pos']>= interval[0])&(full_data['genome_pos']<= interval[1])]
+    destination_df = pd.concat([destination_df, segment])
+destination_df = destination_df.drop_duplicates(keep='first')
+
+for i, x in full_data['gene'].value_counts().items():
+    if i in destination_df['gene'].value_counts().keys():
+        if i in tb_genes:
+            print(i, np.round(destination_df['gene'].value_counts()[i]/full_data['gene'].value_counts()[i],2), '<--')
+        else:
+            print(i, np.round(destination_df['gene'].value_counts()[i]/full_data['gene'].value_counts()[i],2))
+    else:
+        if i in tb_genes:
+            print(i, 0, '<--')
+        else:
+            print(i, 0)
+
+
+
+
+
+
+
+
+
+
+
 
 #%%
 run = 0
