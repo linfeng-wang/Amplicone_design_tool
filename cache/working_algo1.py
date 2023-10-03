@@ -1,4 +1,6 @@
-#version to fall back on
+
+#here I would try to gather al paddings together and make new genome
+
 #%%
 from functools import partial
 from random import choices, randint, randrange, random, sample
@@ -217,6 +219,7 @@ for run in tqdm(range(0,read_number)):
 #! full data needs to be reloaded after each run
 #%%
 # output
+new_genome = ''
 seq = 1
 padding = 250
 accepted_primers = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
@@ -236,7 +239,9 @@ for i, x in enumerate(covered_ranges):
         high_b+= 450
 
     seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
+    new_genome = new_genome + seq_template[0:padding] + seq_template[padding:]
     
+#%%
     # print(low_b, high_b)
     # print(seq_template)
     # print(x)
@@ -268,8 +273,16 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-# output covered coordinates into a bed file
-bed_file_path = f"output/intervals-{read_number}-{read_size}.bed"
+# output covered position proposed by the algorithm into a bed file
+bed_file_path = f"output/intervals-{read_number}-{read_size}_algoRange.bed"
+
+with open(bed_file_path, "w") as bed_file:
+    for start, end in covered_ranges:
+        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
+        bed_file.write(bed_line)
+
+# output coordinates as covered by primers into a bed file
+bed_file_path = f"output/intervals-{read_number}-{read_size}_primerRange.bed"
 
 with open(bed_file_path, "w") as bed_file:
     for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):

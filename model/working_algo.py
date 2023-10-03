@@ -1,5 +1,4 @@
-#here I would try to gather al paddings together and make new genome
-
+#version to fall back on
 #%%
 from functools import partial
 from random import choices, randint, randrange, random, sample
@@ -17,8 +16,8 @@ import json
 from imp import reload
 import primer_selection
 reload(primer_selection)
-import testing
-reload(testing)
+# import testing
+# reload(testing)
 #%%
 def value_counts_list(lst):
     """
@@ -145,7 +144,7 @@ def rolling_sum(df, weight, window_size, genomic_pos):
 #Full data trial
 read_number = 30
 read_size = 1000
-window_size = read_size-150
+window_size = read_size
 # priorities = []
 graph_output = False # set to True to see the graph output
 weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
@@ -216,40 +215,57 @@ for run in tqdm(range(0,read_number)):
     full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
     weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
 #! full data needs to be reloaded after each run
-#%%
+#%% 
 # output
-new_genome = ''
 seq = 1
-padding = 250
+padding = 150
 accepted_primers = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
 primer_pool = []
 for i, x in enumerate(covered_ranges):
     low_b = x[0]
     high_b = x[1]
-    if low_b <= 150:
+    if low_b <= padding:
         low_b = 151
-    elif high_b >= 4411532:
-        high_b = 4411532-151
+    elif high_b >= 4411532-padding:
+        high_b = 4411532-padding
     # if high_b - low_b < 300:
     #     high_b+= 150
     #     low_b-= 150
     if (high_b - low_b) < 350:
         # print('======')
         high_b+= 450
+    else:
+        high_b+= padding
+        low_b-= padding
 
+    # seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
     seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
-    new_genome = new_genome + seq_template[0:padding] + seq_template[padding:]
-    
-#%%
     # print(low_b, high_b)
     # print(seq_template)
     # print(x)
-    primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, low_b, high_b)
+    # print(seq_template)
+    primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding)
+
+#%% Evaluation
     # print(accepted_primers)
-    primer_pos = accepted_primers.iloc[-1][['pLeft_coord','pRight_coord']].values
-    amplified_segment = full_data[(full_data['genome_pos']>= primer_pos[0])&(full_data['genome_pos']<= primer_pos[1])]
-    covered_segment = full_data[(full_data['genome_pos']>= low_b)&(full_data['genome_pos']<= high_b)]
-    # print('======')
+columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin', 'drtype', 'drugs', 'weight']
+
+# Create an empty DataFrame with the specified column headings
+designed =pd.DataFrame(columns=columns)
+
+# Create DataFrame
+covered = pd.DataFrame(columns=columns)
+primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
+for x in primer_pos:
+    covered = pd.concat([covered, full_data[(full_data['genome_pos']>= x[0])&(full_data['genome_pos']<= x[1])]])
+for x in covered_ranges:
+    designed = pd.concat([covered, full_data[(full_data['genome_pos']>= x[0])&(full_data['genome_pos']<= x[1])]])
+
+print(designed['gene'].value_counts())
+print(covered['gene'].value_counts())
+print(covered['gene'].value_counts()/designed['gene'].value_counts())
+#%%
+# print('======')
     # print(amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001))
     # ratio = amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001)
     # # if ratio < 0.85:
@@ -259,7 +275,7 @@ for i, x in enumerate(covered_ranges):
     # if amplified_segment.shape[0]/covered_segment.shape[0] < 0.5:
     #     print()
     # break
-accepted_primers.to_csv(f'output/accepted_primers-{read_number}-{read_size}.csv')
+# accepted_primers.to_csv(f'output/accepted_primers-{read_number}-{read_size}.csv')
 
 # output covered position info into a json file
 class NpEncoder(json.JSONEncoder):
@@ -272,16 +288,8 @@ class NpEncoder(json.JSONEncoder):
             return obj.tolist()
         return super(NpEncoder, self).default(obj)
 
-# output covered position proposed by the algorithm into a bed file
-bed_file_path = f"output/intervals-{read_number}-{read_size}_algoRange.bed"
-
-with open(bed_file_path, "w") as bed_file:
-    for start, end in covered_ranges:
-        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
-        bed_file.write(bed_line)
-
-# output coordinates as covered by primers into a bed file
-bed_file_path = f"output/intervals-{read_number}-{read_size}_primerRange.bed"
+# output covered coordinates into a bed file
+bed_file_path = f"output/intervals-{read_number}-{read_size}.bed"
 
 with open(bed_file_path, "w") as bed_file:
     for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
@@ -300,12 +308,9 @@ json.dump(covered_positions, out_file, cls=NpEncoder, indent = 6)
 
 out_file.close()
 print(f'Output_file:{read_number}-{read_size}')
+# testing.test_coverage(bed_file_path, full_data, tb_drug_resistance_genes.keys())
 
-testing.test_coverage(bed_file_path, full_data, tb_drug_resistance_genes.keys())
-
-
-
-#%%
+#%% 
 tb_genes = tb_drug_resistance_genes.keys()
 destination_df = pd.DataFrame(columns=full_data.columns)
 for interval in covered_ranges:
@@ -428,7 +433,7 @@ list(full_data.loc[(full_data['genome_pos']>=1) & (full_data['genome_pos']<=1000
 # Extracting the sequence from a ref genome
 
 # # Example usage
-# fasta_file = '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa'
+# fasta_file = 'MTB-h37rv_asm19595v2-eg18.fa'
 # sequence_id = 'Chromosome'
 # start_pos = 0
 # end_pos = 20

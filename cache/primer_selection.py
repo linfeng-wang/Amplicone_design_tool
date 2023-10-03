@@ -1,6 +1,5 @@
 #here I would try to gather al paddings together and make new genome
 
-# the versions to fall back on
 #%%
 from functools import partial
 from random import choices, randint, randrange, random, sample
@@ -479,7 +478,7 @@ def result_extraction_sides(primer_pool, accepted_primers, sequence, seq, paddin
 # primer_pool, accepted_primers = result_extraction(primer_pool, accepted_primers, test, seq)
 
 # %% trial with the whole genome at once
-df.loc[0][['pLeft_Sequences','pRight_Sequences']].values.tolist()
+# df.loc[0][['pLeft_Sequences','pRight_Sequences']].values.tolist()
 
 #%%
 tb_genome = extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
@@ -531,44 +530,51 @@ results = bindings.design_primers(
 #%%
 len(extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome'))
 # %%
-sequence = extract_sequence_from_fasta(48586, 48606, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
+sequence = extract_sequence_from_fasta(48586, 48606, padding = 250, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
+
+middle = extract_sequence_from_fasta(30000, 30500, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/GCF_000002765.5_GCA_000002765_genomic.fna', sequence_id='NC_004325.2')
+
 # sequence[:250]+'N'*100+sequence[-250:]
-print(sequence)
-#%%
+# print(sequence)
 left_results = bindings.design_primers(
             seq_args={
                 'SEQUENCE_ID': 'leftprimer',
-                # 'SEQUENCE_TEMPLATE': sequence[:250]+sequence[-250:],
+
                 'SEQUENCE_TEMPLATE': sequence[:250]+sequence[-250:],
-                'SEQUENCE_INCLUDED_REGION': [100,400]
+                'SEQUENCE_INCLUDED_REGION': [(150,350)],
+                'SEQUENCE_EXCLUDED_REGION': [(200,300)],
+                
+                # 'SEQUENCE_TEMPLATE': sequence[:250]+middle+sequence[-250:],
+                # 'SEQUENCE_INCLUDED_REGION': [250,750],
+                # 'SEQUENCE_EXCLUDED_REGION': [250,750],
+
                 # 'SEQUENCE_INCLUDED_REGION': sequence[:251],
             },
             global_args={
                 'PRIMER_NUM_RETURN': 15,
-                'PRIMER_OPT_SIZE': 20,
-                'PRIMER_NUM_RETURN': 15,
+                # 'PRIMER_OPT_SIZE': 20,
                 'PRIMER_PICK_INTERNAL_OLIGO': 0,
                 'PRIMER_INTERNAL_MAX_SELF_END': 8,
                 'PRIMER_MIN_THREE_PRIME_DISTANCE':10,
                 'PRIMER_MIN_FIVE_PRIME_DISTANCE':10,
                 'PRIMER_MIN_SIZE': 18,
-                'PRIMER_MAX_SIZE': 30,
-                'PRIMER_OPT_TM': 62.0,
-                'PRIMER_MIN_TM': 60.0,
-                'PRIMER_MAX_TM': 64.0,
-                'PRIMER_MIN_GC': 45.0,
-                'PRIMER_MAX_GC': 60.0,
+                'PRIMER_MAX_SIZE': 36,
+                'PRIMER_OPT_TM': 67.0,
+                'PRIMER_MIN_TM': 63.0,
+                'PRIMER_MAX_TM': 72.0,
+                'PRIMER_MIN_GC': 55.0,
+                'PRIMER_MAX_GC': 70.0,
                 'PRIMER_MAX_POLY_X': 5,
                 'PRIMER_INTERNAL_MAX_POLY_X': 5,
                 'PRIMER_SALT_MONOVALENT': 50.0,
-                'PRIMER_DNA_CONC': 50.0,
-                'PRIMER_MAX_NS_ACCEPTED': 0,
+                'PRIMER_DNA_CONC': 500.0,
+                'PRIMER_MAX_NS_ACCEPTED': 2,
                 'PRIMER_MAX_SELF_ANY': 5,
                 'PRIMER_MAX_SELF_END': 2,
                 'PRIMER_PAIR_MAX_COMPL_ANY': 5,
                 'PRIMER_PAIR_MAX_COMPL_END': 2,
-                # 'PRIMER_PRODUCT_SIZE_RANGE': [490,510],
-                'PRIMER_PRODUCT_SIZE_RANGE': '300-400',
+                'PRIMER_PRODUCT_SIZE_RANGE': '170-200',
+                # 'PRIMER_PRODUCT_SIZE_RANGE': '550-650',
                 # 'PRIMER_PRODUCT_SIZE_RANGE': [
                 #     # [950,1050]
                 #     [len(sequence)-350,len(sequence)-250]

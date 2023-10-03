@@ -1,5 +1,6 @@
 #here I would try to gather al paddings together and make new genome
 
+# the versions to fall back on
 #%%
 from functools import partial
 from random import choices, randint, randrange, random, sample
@@ -21,7 +22,7 @@ from primer3 import bindings
 
 
 # %%
-reference_genome= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa'
+reference_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
 def calculate_gc_content(sequence):
     """
     Calculate the percentage of G and C nucleotides in a DNA sequence.
@@ -44,7 +45,7 @@ def calculate_gc_content(sequence):
     gc_percentage = (gc_count / total_count) * 100
     return gc_percentage
 
-def extract_sequence_from_fasta(start_pos, end_pos, padding = 150, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome'):
+def extract_sequence_from_fasta(start_pos, end_pos, padding = 150, fasta_file= 'MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome'):
     """
     Extracts a subsequence from a FASTA file based on the given sequence ID, start position, and end position.
     """
@@ -104,7 +105,7 @@ def updown_stream_primer_range(start_pos, end_pos, dis_range=150):
 # blast_primers(['AGAAGGTGTGGAAGTTGTGGAACGTGTTACGGTTGTTCGTTTAGC', 'GTCGAGGGGTTTGCTCTGTT','CGATCGATCGATCGATCGAT'], reference_genome)
 #%%
 # primer_file = "primers.fasta"
-# reference_genome_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa'
+# reference_genome_file= 'MTB-h37rv_asm19595v2-eg18.fa'
 
 # blastn_cline = NcbiblastnCommandline(query=primer_file, subject=reference_genome_file, outfmt=6, out="blast_results.txt")
 # # query="m_cold.fasta", db="nt", strand="plus",evalue=0.001, out="m_cold.xml", outfmt=5
@@ -165,16 +166,16 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, low
     size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
 
     # size_range = f'{len(sequence)-350}-{len(sequence)-250}'
-    print('size_range:',size_range)
-    print('SEQUENCE_INCLUDED_REGION:', [padding-10,len(sequence)-padding+10],)
+    # print('size_range:',size_range)
+    # print('SEQUENCE_INCLUDED_REGION:', [padding-10,len(sequence)-padding+10],)
     try:
         results = bindings.design_primers(
             seq_args={
                 'SEQUENCE_ID': 'MH1000',
                 'SEQUENCE_TEMPLATE': sequence,
-                # 'SEQUENCE_INCLUDED_REGION': [150,len(sequence)-150]
+                'SEQUENCE_INCLUDED_REGION': [150,len(sequence)-150],
                 # 'SEQUENCE_INCLUDED_REGION': [(0,len(sequence)),],
-                'SEQUENCE_INCLUDED_REGION': [(0,padding),(len(sequence)-padding,len(sequence))],
+                # 'SEQUENCE_INCLUDED_REGION': [(0,padding),(len(sequence)-padding,len(sequence))],
                 'SEQUENCE_EXCLUDED_REGION':[(padding,len(sequence)-padding)]
             },
             global_args={
@@ -478,10 +479,10 @@ def result_extraction_sides(primer_pool, accepted_primers, sequence, seq, paddin
 # primer_pool, accepted_primers = result_extraction(primer_pool, accepted_primers, test, seq)
 
 # %% trial with the whole genome at once
-df.loc[0][['pLeft_Sequences','pRight_Sequences']].values.tolist()
+# df.loc[0][['pLeft_Sequences','pRight_Sequences']].values.tolist()
 
 #%%
-tb_genome = extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
+tb_genome = extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= 'MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
 
 # covered_ranges = [(4326008, 4326858), (4043869, 4044719), (4247642, 4248492), (1472644, 1473494), (2284366, 2285216), (2287239, 2288089), (4407543, 4408393), (1917939, 1918789), (760314, 761164), (2518310, 2519160), (2154492, 2155342), (2715339, 2716189), (3071476, 3072326), (4246734, 4247584), (765572, 766422), (4327029, 4327879), (1475956, 1476806), (1416212, 1417062), (764363, 765213), (762089, 762939), (3087136, 3087986), (4325194, 4326044), (4240592, 4241442), (3072537, 3073387), (2282776, 2283626), (3073768, 3074618), (4243203, 4244053), (2285354, 2286204), (6575, 7425), (2288412, 2289262)]
 # covered_ranges = [(4326008, 4327008)]
@@ -489,6 +490,7 @@ covered_ranges = [(2226008, 2226858)]
 formatted_ranges = [f"{start}-{end}" for start, end in covered_ranges]
 
 results = bindings.design_primers(
+    
             seq_args={
                 'SEQUENCE_ID': 'MH1000',
                 'SEQUENCE_TEMPLATE':tb_genome,
@@ -528,53 +530,46 @@ results = bindings.design_primers(
                 # ],
             })
 #%%
-len(extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome'))
+len(extract_sequence_from_fasta(0, 4411532, padding = 0, fasta_file= 'MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome'))
 # %%
-sequence = extract_sequence_from_fasta(48586, 48606, padding = 250, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
-
-middle = extract_sequence_from_fasta(30000, 30500, padding = 0, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/GCF_000002765.5_GCA_000002765_genomic.fna', sequence_id='NC_004325.2')
-
+sequence = extract_sequence_from_fasta(48586, 48606, padding = 0, fasta_file= 'MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
 # sequence[:250]+'N'*100+sequence[-250:]
-# print(sequence)
+print(sequence)
+#%%
 left_results = bindings.design_primers(
             seq_args={
                 'SEQUENCE_ID': 'leftprimer',
-
+                # 'SEQUENCE_TEMPLATE': sequence[:250]+sequence[-250:],
                 'SEQUENCE_TEMPLATE': sequence[:250]+sequence[-250:],
-                'SEQUENCE_INCLUDED_REGION': [(150,350)],
-                'SEQUENCE_EXCLUDED_REGION': [(200,300)],
-                
-                # 'SEQUENCE_TEMPLATE': sequence[:250]+middle+sequence[-250:],
-                # 'SEQUENCE_INCLUDED_REGION': [250,750],
-                # 'SEQUENCE_EXCLUDED_REGION': [250,750],
-
+                'SEQUENCE_INCLUDED_REGION': [100,400]
                 # 'SEQUENCE_INCLUDED_REGION': sequence[:251],
             },
             global_args={
                 'PRIMER_NUM_RETURN': 15,
-                # 'PRIMER_OPT_SIZE': 20,
+                'PRIMER_OPT_SIZE': 20,
+                'PRIMER_NUM_RETURN': 15,
                 'PRIMER_PICK_INTERNAL_OLIGO': 0,
                 'PRIMER_INTERNAL_MAX_SELF_END': 8,
                 'PRIMER_MIN_THREE_PRIME_DISTANCE':10,
                 'PRIMER_MIN_FIVE_PRIME_DISTANCE':10,
                 'PRIMER_MIN_SIZE': 18,
-                'PRIMER_MAX_SIZE': 36,
-                'PRIMER_OPT_TM': 67.0,
-                'PRIMER_MIN_TM': 63.0,
-                'PRIMER_MAX_TM': 72.0,
-                'PRIMER_MIN_GC': 55.0,
-                'PRIMER_MAX_GC': 70.0,
+                'PRIMER_MAX_SIZE': 30,
+                'PRIMER_OPT_TM': 62.0,
+                'PRIMER_MIN_TM': 60.0,
+                'PRIMER_MAX_TM': 64.0,
+                'PRIMER_MIN_GC': 45.0,
+                'PRIMER_MAX_GC': 60.0,
                 'PRIMER_MAX_POLY_X': 5,
                 'PRIMER_INTERNAL_MAX_POLY_X': 5,
                 'PRIMER_SALT_MONOVALENT': 50.0,
-                'PRIMER_DNA_CONC': 500.0,
-                'PRIMER_MAX_NS_ACCEPTED': 2,
+                'PRIMER_DNA_CONC': 50.0,
+                'PRIMER_MAX_NS_ACCEPTED': 0,
                 'PRIMER_MAX_SELF_ANY': 5,
                 'PRIMER_MAX_SELF_END': 2,
                 'PRIMER_PAIR_MAX_COMPL_ANY': 5,
                 'PRIMER_PAIR_MAX_COMPL_END': 2,
-                'PRIMER_PRODUCT_SIZE_RANGE': '170-200',
-                # 'PRIMER_PRODUCT_SIZE_RANGE': '550-650',
+                # 'PRIMER_PRODUCT_SIZE_RANGE': [490,510],
+                'PRIMER_PRODUCT_SIZE_RANGE': '300-400',
                 # 'PRIMER_PRODUCT_SIZE_RANGE': [
                 #     # [950,1050]
                 #     [len(sequence)-350,len(sequence)-250]
@@ -619,7 +614,7 @@ df_left_1 = pd.concat([df_left, df_left, df_insert], axis=1)
 seq = 1
 primer_pool = []
 accepted_primers = []
-sequence = extract_sequence_from_fasta(4326008, 4326858, padding = 250, fasta_file= '/mnt/storage10/lwang/Projects/Amplicone_design_tool/MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
+sequence = extract_sequence_from_fasta(4326008, 4326858, padding = 250, fasta_file= 'MTB-h37rv_asm19595v2-eg18.fa', sequence_id='Chromosome')
 primer_pool1, accepted_primers1 = result_extraction_sides(primer_pool, accepted_primers, sequence, seq, 250, low_b=4326008, high_b=4326858)
 
 # %%
