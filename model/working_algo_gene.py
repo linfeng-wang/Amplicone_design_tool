@@ -19,8 +19,6 @@ reload(primer_selection)
 # import testing
 # reload(testing)
 
-
-
 #%%
 def value_counts_list(lst):
     """
@@ -146,83 +144,98 @@ def rolling_sum(df, weight, window_size, genomic_pos):
 # full_data['weight'].min()
 #%%
 #Full data trial
-read_number = 30
-read_size = 1000
-window_size = read_size
-# priorities = []
-graph_output = False # set to True to see the graph output
-weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-pos = full_data['genome_pos'].unique()
-covered_positions = {}
-covered_ranges = []
-print('Placing Amplicones...')
-for run in tqdm(range(0,read_number)):
-    while graph_output:
-        trace = go.Scatter(
-        x=list(range(1, len(weight_window_sum) + 1)),
-        y=weight_window_sum,
-        mode='lines',
-        line=dict(color='blue'),
-        fill='tozeroy',
-        fillcolor='rgba(0, 0, 255, 0.3)')
-        # Create the layout
-        layout = go.Layout(
-            title='Line Density Plot',
-            xaxis=dict(title='Genomic Position'),
-            yaxis=dict(title='Density'),
-            shapes=[
-            # Add a vertical line at x=8
-            dict(
-                type='line',
-                x0=np.argmax(weight_window_sum),
-                x1=np.argmax(weight_window_sum),
-                y0=0,
-                y1=max(weight_window_sum),
-                line=dict(color='red', width=2)
-            )
-        ]
-        )
-        # Create the figure
-        fig = go.Figure(data=[trace], layout=layout)
-        # Display the plot
-        fig.show()
-    
-    start = pos[np.argmax(weight_window_sum)] # find the index of the max value in the rolling sum
-    # in_range = [i for i in pos if i <= start+window_size] # find all values in the window
-    # end = min(in_range, key=lambda x:abs(x-(start+window_size))) # find the closest value to the end of the window
-    end = start+window_size
-    if end > 4485058:
-        end = 4485058-200
-    # if len(covered_ranges) != 0:
-    #     pass
-    # break
-    # elif len(covered_ranges) > 0:
-    #     for i in range(len(covered_ranges)):
-    #         if start > covered_ranges[i][0] and start < covered_ranges[i][1]:
-    #             start_index = pos.index(covered_ranges[i][1])+1
-    #             start = pos[start_index]
-    #             if covered_ranges[i][1]+1 + read_size > full_data.shape[0]:
-    #                 end = full_data.shape[0]
-    #             end = covered_ranges[i][1]+1 + read_size
-    #         if end > covered_ranges[i][0] and end < covered_ranges[i][1]:
-    #             end = covered_ranges[i][0]-1
-    #             if covered_ranges[i][0]-1 - read_size < 0:
-    #                 start = 0
-    #             start = covered_ranges[i][0]-1 - read_size
-    # else:
-    #     print('error')
-    # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[['genome_pos','gene','sublin','drtype','drugs','weight']][start:end].sort_values(by=['weight']).to_dict('records')} 
-    covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
-    # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}}  # concise version of output
-    covered_ranges.append([start, end])
-    # 
-    # full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = 0 # set the weight of the covered positions to 0
-    full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
+def place_amplicone(full_data, read_number, read_size, graphic_output=False):
+    read_number = read_number
+    read_size = read_size
+    window_size = read_size
+    # priorities = []
+    graph_output = False # set to True to see the graph output
     weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-#! full data needs to be reloaded after each run
+    pos = full_data['genome_pos'].unique()
+    covered_positions = {}
+    covered_ranges = []
+    print('Placing Amplicones...')
+    for run in tqdm(range(0,read_number)):
+        while graph_output:
+            trace = go.Scatter(
+            x=list(range(1, len(weight_window_sum) + 1)),
+            y=weight_window_sum,
+            mode='lines',
+            line=dict(color='blue'),
+            fill='tozeroy',
+            fillcolor='rgba(0, 0, 255, 0.3)')
+            # Create the layout
+            layout = go.Layout(
+                title='Line Density Plot',
+                xaxis=dict(title='Genomic Position'),
+                yaxis=dict(title='Density'),
+                shapes=[
+                # Add a vertical line at x=8
+                dict(
+                    type='line',
+                    x0=np.argmax(weight_window_sum),
+                    x1=np.argmax(weight_window_sum),
+                    y0=0,
+                    y1=max(weight_window_sum),
+                    line=dict(color='red', width=2)
+                )
+            ]
+            )
+            # Create the figure
+            fig = go.Figure(data=[trace], layout=layout)
+            # Display the plot
+            fig.show()
+        
+        start = pos[np.argmax(weight_window_sum)] # find the index of the max value in the rolling sum
+        # in_range = [i for i in pos if i <= start+window_size] # find all values in the window
+        # end = min(in_range, key=lambda x:abs(x-(start+window_size))) # find the closest value to the end of the window
+        end = start+window_size
+        if end > 4485058:
+            end = 4485058-200
+        # if len(covered_ranges) != 0:
+        #     pass
+        # break
+        # elif len(covered_ranges) > 0:
+        #     for i in range(len(covered_ranges)):
+        #         if start > covered_ranges[i][0] and start < covered_ranges[i][1]:
+        #             start_index = pos.index(covered_ranges[i][1])+1
+        #             start = pos[start_index]
+        #             if covered_ranges[i][1]+1 + read_size > full_data.shape[0]:
+        #                 end = full_data.shape[0]
+        #             end = covered_ranges[i][1]+1 + read_size
+        #         if end > covered_ranges[i][0] and end < covered_ranges[i][1]:
+        #             end = covered_ranges[i][0]-1
+        #             if covered_ranges[i][0]-1 - read_size < 0:
+        #                 start = 0
+        #             start = covered_ranges[i][0]-1 - read_size
+        # else:
+        #     print('error')
+        # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[['genome_pos','gene','sublin','drtype','drugs','weight']][start:end].sort_values(by=['weight']).to_dict('records')} 
+        covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
+        # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}}  # concise version of output
+        covered_ranges.append([start, end])
+        # 
+        # full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = 0 # set the weight of the covered positions to 0
+        full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
+        weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
+    #! full data needs to be reloaded after each run
+    return covered_positions, covered_ranges
+#%%
+read_size = 1000
+specific_gene = ['katG']
+specific_gene_amplicone = 5
+non_specific_amplicone = 25
+specific_gene_data = full_data[full_data['gene'].isin(specific_gene)]
+non_specific_gene_data = full_data[~full_data['gene'].isin(specific_gene)]
+
+covered_positions, covered_ranges = [], []
+covered_positions_sp, covered_ranges_sp = place_amplicone(specific_gene_data, specific_gene_amplicone, read_size)
+covered_positions_nosp, covered_ranges_nosp = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size)
+covered_positions = {**covered_positions_sp, **covered_positions_nosp}
+covered_ranges = covered_ranges_sp + covered_ranges_nosp
 #%%
 # output
-seq = 1
+# seq = 1
 padding = 150
 accepted_primers = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
 primer_pool = []
@@ -252,6 +265,19 @@ for i, x in tqdm(enumerate(covered_ranges)):
     # print(seq_template)
     primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding)
 
+#%%
+primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
+columns = ['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord', 'SNP_inclusion']
+
+# Create an empty DataFrame with the specified column headings
+primer_inclusion =pd.DataFrame(columns=columns)
+for i, row in accepted_primers.iterrows():
+    data = full_data[(full_data['genome_pos']>= row['pLeft_coord']) & (full_data['genome_pos']<= row['pRight_coord'])]    
+    info = row[['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord']]
+    SNP = data['gene'].str.cat(data['change'], sep='-').unique()
+    info['SNP_inclusion'] = ','.join(SNP)
+    primer_inclusion.loc[i] = info.tolist()
+    # primer_inclusion = primer_inclusion.append(info.to_dict(), ignore_index=True)        
 #%% Evaluation
     # print(accepted_primers)
 columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin', 'drtype', 'drugs', 'weight']
