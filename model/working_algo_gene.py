@@ -276,8 +276,9 @@ for i, row in accepted_primers.iterrows():
     info = row[['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord']]
     SNP = data['gene'].str.cat(data['change'], sep='-').unique()
     info['SNP_inclusion'] = ','.join(SNP)
-    primer_inclusion.loc[i] = info.tolist()
-    # primer_inclusion = primer_inclusion.append(info.to_dict(), ignore_index=True)        
+    primer_inclusion.loc[len(primer_inclusion)] = info.tolist()
+
+primer_inclusion.to_csv('primer_inclusion.csv')
 #%% Evaluation
     # print(accepted_primers)
 columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin', 'drtype', 'drugs', 'weight']

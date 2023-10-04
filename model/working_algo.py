@@ -252,6 +252,20 @@ for i, x in tqdm(enumerate(covered_ranges)):
     # print(seq_template)
     primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding)
 
+#%%
+primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
+columns = ['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord', 'SNP_inclusion']
+
+# Create an empty DataFrame with the specified column headings
+primer_inclusion =pd.DataFrame(columns=columns)
+for i, row in accepted_primers.iterrows():
+    data = full_data[(full_data['genome_pos']>= row['pLeft_coord']) & (full_data['genome_pos']<= row['pRight_coord'])]    
+    info = row[['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord']]
+    SNP = data['gene'].str.cat(data['change'], sep='-').unique()
+    info['SNP_inclusion'] = ','.join(SNP)
+    primer_inclusion.loc[len(primer_inclusion)] = info.tolist()
+
+primer_inclusion.to_csv('primer_inclusion.csv')
 #%% Evaluation
     # print(accepted_primers)
 columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin', 'drtype', 'drugs', 'weight']
