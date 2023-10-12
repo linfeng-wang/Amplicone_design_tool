@@ -24,7 +24,7 @@ from Bio import SeqIO
 
 
 # %%
-ref_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
+reference_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
 def calculate_gc_content(sequence):
     """
     Calculate the percentage of G and C nucleotides in a DNA sequence.
@@ -62,19 +62,15 @@ def extract_sequence_from_fasta(start_pos, end_pos, padding = 150, fasta_file= '
     # If the sequence ID is not found, return None
     return None
 
-def genome_size(fasta_file):
-    total_length = 0
-    with open(fasta_file, 'r') as file:
-        for line in file:
-            if not line.startswith('>'):
-                total_length += len(line.strip())
-    return total_length
+# def complement_sequence(seq):
+#     complement = {"A": "T", "T": "A", "C": "G", "G": "C"}
+#     return "".join(complement[base] for base in seq)
 #%%
 def complement_sequence(dna_sequence):
     trans = str.maketrans('ATCG', 'TAGC')
     return dna_sequence.upper().translate(trans)
 
-# print(complement_sequence("ATGCGTA"))
+print(complement_sequence("ATGCGTA"))
 # Example usage:
 # dna_sequence = "ATGCGTA"
 # complement_sequence = complement_sequence(dna_sequence)
@@ -110,28 +106,43 @@ def check_heterodimer(primer1, primer2):
 
 #%%
 # test = extract_sequence_from_fasta(1000, 2300)
+def genome_size(fasta_file):
+    total_length = 0
+    with open(fasta_file, 'r') as file:
+        for line in file:
+            if not line.startswith('>'):
+                total_length += len(line.strip())
+    return total_length
 
-def find_sequence_location(query_seq, fasta_file=ref_genome):
-    ref_genome = SeqIO.read(fasta_file, "fasta")
-    position = ref_genome.seq.find(query_seq)
+def find_sequence_location(query_seq, fasta_file=reference_genome):
+    reference_genome = SeqIO.read(fasta_file, "fasta")
+    position = reference_genome.seq.find(query_seq)
     if position != -1:
-        return [position, position+len(query_seq)]
+        return position, position+len(query_seq)
     else:
         print('!!!Primer not found in the reference genome')
         return 0
 
-pLeft_coord = []
-pLeft_coord.append(find_sequence_location('CATCGCACGTCGTCTTTCCG', ref_genome)[0])
-
-# find_sequence_location('CATCGCACGTCGTCTTTCCG')[0]
+# find_sequence_location('CATCGCACGTCGTCTTTCCG')
 # find_sequence_location(complement_sequence('CATCGCACGTCGTCTTTCCG'))
-#%%
+
+# find_sequence_location('TTCCCGCTGGAATGGTTCGA')
+# find_sequence_location(complement_sequence('TTCCCGCTGGAATGGTTCGA'))
+
+def calculate_similarity(seq1, seq2, similarity_threshold):
+    matches = 0
+    required_matches = len(seq1) * similarity_threshold / 100
+    for a, b in zip(seq1, seq2):
+        if a == b:
+            matches += 1
+            if matches >= required_matches:
+                return True
+    return False
+
 def simplified_tm(seq):
-    # Simplified melting temperature calculation based on base pair count
     return (seq.count('A') + seq.count('T')) * 2 + (seq.count('C') + seq.count('G')) * 4
 
 def simplified_dg(seq):
-    # Simplified Gibbs free energy calculation based on the nearest-neighbor model (not accurate)
     nn_params = {
         'AA': -1.0, 'TT': -1.0,
         'AT': -0.9, 'TA': -0.9,
@@ -148,48 +159,107 @@ def simplified_dg(seq):
         dg += nn_params.get(dinucleotide, 0)
     return dg
 
-def calculate_similarity(seq1, seq2):
-    matches = sum(1 for a, b in zip(seq1, seq2) if a == b)
-    return matches / len(seq1) * 100
+def precompute_dinucleotide_params(genome):
+    unique_dinucleotides = set(genome[i:i+2] for i in range(len(genome) - 1))
+    tm_params = {dinuc: simplified_tm(dinuc) for dinuc in unique_dinucleotides}
+    dg_params = {dinuc: simplified_dg(dinuc) for dinuc in unique_dinucleotides}
+    return tm_params, dg_params
 
-def has_multiple_binding_sites(sequence, genome, similarity_threshold=81, min_tm=60, max_dg=-10):
+# tm_params, dg_params = precompute_dinucleotide_params(genome)
+
+def has_multiple_binding_sites(sequence, genome, similarity_threshold=70, min_tm=40, max_dg=-10, tm_params=tm_params, dg_params=dg_params):
     seq_len = len(sequence)
     genome_len = len(genome)
     count = 0
 
-    for i in range(genome_len - seq_len + 1):
-        subseq = genome[i:i + seq_len]
-        if calculate_similarity(subseq, sequence)>similarity_threshold:
-            tm = simplified_tm(subseq)
-            dg = simplified_dg(subseq)
-            
-            within_tm_threshold = tm >= min_tm
-            within_dg_threshold = dg <= max_dg
+    # Pre-calculate the first Tm and ΔG values
+    tm = sum(tm_params[genome[i:i+2]] for i in range(seq_len - 1))
+    dg = sum(dg_params[genome[i:i+2]] for i in range(seq_len - 1))
 
-            if within_tm_threshold and within_dg_threshold:
-                # print(genome[i:i + seq_len])
-                count += 1
-                if count > 1:
-                    return True  # Early exit if more than one binding site is found
+    for i in range(genome_len - seq_len + 1):
+        if i > 0:
+            # Update the Tm and ΔG values efficiently as the window moves
+            old_tm = tm_params[genome[i-1:i+1]]
+            new_tm = tm_params[genome[i+seq_len-2:i+seq_len]]
+            tm += new_tm - old_tm
+            
+            old_dg = dg_params[genome[i-1:i+1]]
+            new_dg = dg_params[genome[i+seq_len-2:i+seq_len]]
+            dg += new_dg - old_dg
+
+        subseq = genome[i:i + seq_len]
+        within_similarity_threshold = calculate_similarity(sequence, subseq, similarity_threshold)
+        within_tm_threshold = tm >= min_tm
+        within_dg_threshold = dg <= max_dg
+
+        if within_similarity_threshold and within_tm_threshold and within_dg_threshold:
+            count += 1
+            if count > 1:
+                return True  # Early exit if more than one binding site is found
 
     return False  # Return False if only one or no binding sites are found
 
-# # Usage:
-# primer = 'CGAACTCGAGGCTGCCTACT'
-# # primer = 'GCTCGTCCATGTCCCACCAT'
+# Usage:
+# primer = 'GCTCGTCCATGTCCCACCAT'
 # genome = primer_selection.extract_sequence_from_fasta(0, genome_size(ref_genome),0)
-# result = has_multiple_binding_sites(primer, genome, 81)
+# similarity_threshold = 70  # For example, 90% similarity
+# min_tm = 40  # Example threshold for minimum melting temperature
+# max_dg = -10  # Example threshold for maximum Gibbs free energy
+
+# result = has_multiple_binding_sites(sequence, genome, similarity_threshold, min_tm, max_dg)
 # print(result)  # Output: True or False
 
+#%%
+# def find_sequence(dna_seq, genomic_position, search_range, fasta_file=reference_genome):
+#     with open(fasta_file, "r") as handle:
+#         for record in SeqIO.parse(handle, "fasta"):
+#             # Assuming genomic_position is 1-based
+#             start = max(0, genomic_position - search_range-1)  # adjust to 0-based, -1 more for upstream 100 bps
+#             end = genomic_position + search_range # +100 bps downstream
+#             region = record.seq[start:end]
+#             location = region.find(dna_seq)
+#             if location != -1:
+#                 location += start  # adjust location to whole genome
+#                 print(f'Sequence {dna_seq} found at position {location + 1} to {location + len(dna_seq)} in {record.id}')
+#                 return (location + 1, location + len(dna_seq))  # 1-based position
+#     print(f'Sequence {dna_seq} not found in the specified region')
+#     return None
+
+# find_sequence(complement_sequence('CATCGCACGTCGTCTTTCCG'),3119505, 170)
+# # Usage
+# #%%
+# from Bio import SeqIO
+# from Bio.Seq import Seq
+
+# def sequence_similarity(seq1, seq2):
+#     matches = sum(1 for a, b in zip(seq1, seq2) if a == b)
+#     return matches / len(seq1) * 100
+
+# def find_sequence(dna_seq, genomic_position, snp_threshold=100,  fasta_file=reference_genome):
+#     with open(fasta_file, "r") as handle:
+#         for record in SeqIO.parse(handle, "fasta"):
+#             start = max(0, genomic_position - 101)
+#             end = genomic_position + 100
+#             region = record.seq[start:end]
+#             for i in range(len(region) - len(dna_seq) + 1):
+#                 sub_seq = region[i:i+len(dna_seq)]
+#                 similarity = sequence_similarity(dna_seq, sub_seq)
+#                 if similarity >= snp_threshold:
+#                     location = start + i  # adjust location to whole genome
+#                     print(f'Sequence {dna_seq} found with {similarity}% similarity at position {location + 1} to {location + len(dna_seq)} in {record.id}')
+#                     return (location + 1, location + len(dna_seq))  # 1-based position
+#     print(f'Sequence {dna_seq} not found in the specified region with at least {snp_threshold}% similarity')
+#     return None
+
+# find_sequence('CATCGCACGTCGTCTTTCCG',3119505, 60)
 
 # %%
-def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome):
+def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, genome):
     # print([len(sequence)-50,len(sequence)+50])
     # print(len(sequence))
     # size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
     size_range = f'{len(sequence)-padding*2}-{len(sequence)}'
-    genome = extract_sequence_from_fasta(0, genome_size(ref_genome),0)
-    no_primer = []
+
     # size_range = f'{len(sequence)-350}-{len(sequence)-250}'
     # print('size_range:',size_range)
     # print('SEQUENCE_INCLUDED_REGION:', [padding-10,len(sequence)-padding+10],)
@@ -204,7 +274,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 # 'SEQUENCE_EXCLUDED_REGION':[(padding,len(sequence)-padding)]
             },
             global_args={
-                'PRIMER_NUM_RETURN': 30,
+                'PRIMER_NUM_RETURN': 15,
                 'PRIMER_OPT_SIZE': 20,
                 'PRIMER_PICK_INTERNAL_OLIGO': 0,
                 'PRIMER_INTERNAL_MAX_SELF_END': 8,
@@ -258,26 +328,24 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
         Product_size.append(primer_num['PRODUCT_SIZE'])
         Penalty.append(primer_num['PENALTY'])
     for i, primer_num in enumerate(results['PRIMER_LEFT']):
-        pLeft_ID.append(f'P{seq}-L{i}')
+        pLeft_ID.append(f'P{seq}-Left{i}')
         # pLeft_coord.append(primer_num['COORDS'][0]+low_b)
-        # print(primer_num['SEQUENCE'])
-        # print('===')
-        pLeft_coord.append(find_sequence_location(primer_num['SEQUENCE'], ref_genome)[0])
+        pLeft_coord.append(find_sequence_location(primer_num['SEQUENCE'], reference_genome)[0])
 
         pLeft_length.append(primer_num['COORDS'][1])
         pLeft_Tm.append(primer_num['TM'])
         pLeft_GC.append(primer_num['GC_PERCENT'])
-        pLeft_Sequences.append(complement_sequence(primer_num['SEQUENCE']))
+        pLeft_Sequences.append(primer_num['SEQUENCE'])
         pLeft_EndStability.append(primer_num['END_STABILITY'])
         
     for i, primer_num in enumerate(results['PRIMER_RIGHT']):
-        pRight_ID.append(f'P{seq}-R{i}')
+        pRight_ID.append(f'P{seq}-Right{i}')
         # pRight_coord.append(primer_num['COORDS'][0]+low_b)
-        pRight_coord.append(find_sequence_location(reverse_complement_sequence(primer_num['SEQUENCE']),ref_genome)[1])
+        pRight_coord.append(find_sequence_location(reverse_complement_sequence(primer_num['SEQUENCE']),reference_genome)[1])
         pRight_length.append(primer_num['COORDS'][1])
         pRight_Tm.append(primer_num['TM'])
         pRight_GC.append(primer_num['GC_PERCENT'])
-        pRight_Sequences.append(reverse_complement_sequence(primer_num['SEQUENCE']))
+        pRight_Sequences.append(primer_num['SEQUENCE'])
         pRight_EndStability.append(primer_num['END_STABILITY'])
 
     df = pd.DataFrame({'pLeft_ID':pLeft_ID, 'pLeft_coord':pLeft_coord, 'pLeft_length':pLeft_length, 'pLeft_Tm':pLeft_Tm, 'pLeft_GC':pLeft_GC, 'pLeft_Sequences':pLeft_Sequences, 'pLeft_EndStability':pLeft_EndStability, 
@@ -286,73 +354,37 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
     # print(df)
     # print(df[['pLeft_coord','pRight_coord','Product_size','pLeft_Sequences','pRight_Sequences']])
     # print('original_range:',low_b, high_b)
-    # tm_params, dg_params = precompute_dinucleotide_params(genome)
-    
     if len(primer_pool) == 0:
-        print(f'{df.shape[0]} primers designed')
-        for i, row in df.iterrows():
-            left_ok = True
-            right_ok = True
-            left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
-            right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
-            if left_ok == True and right_ok == True:
-                primer_pool.append(complement_sequence(row['pLeft_Sequences']))
-                primer_pool.append(row['pRight_Sequences'])
-                row_df = pd.DataFrame(row).T
-                accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair {i} accepted')
-                print('***')
-                break
-            else:
-                print(f'Primer pair {i} has alternative binding site')
-                continue
-        # print(primer_pool, accepted_primers)
+        primer_pool.extend(df.loc[0][['pLeft_Sequences','pRight_Sequences']].values.tolist())
+        first_row_df = pd.DataFrame(df.iloc[0]).T
+        # print(first_row_df)
+        accepted_primers = pd.concat([accepted_primers, first_row_df],axis=0)
         # print(accepted_primers)
         # print(df.iloc[0])
         # print(1)
     else:
         #print('Checking for homodimer')
-        print(f'{df.shape[0]} primers designed')
         for i, row in df.iterrows():
             # print(row)
             left_ok = True
             right_ok = True
             for x in primer_pool: # heterodimer check
-                if check_heterodimer(x, complement_sequence(row['pLeft_Sequences'])) == False:
+                if check_heterodimer(x, row['pLeft_Sequences']) == False:
                     left_ok = False 
                 if check_heterodimer(x, row['pRight_Sequences']) == False:
                     right_ok = False
-            #Alternative binding check
-            if left_ok != True or right_ok != True:
-                if i == df.shape[0]:
-                    print('!!!No suitable primer found: perhaps too many amplicones')
-                else:
-                    print(f'Primer pair {i} has alternative binding site')
-                    if i == df.shape[0]:
-                        print(f'!!!No suitable primer found:form covered_range[seq], please manually inspect the sequence')
-                    no_primer.append(seq)
-                continue
-            left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
-            right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
+            # alternative binding check
+            left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome, similarity_threshold, min_tm, max_dg, tm_params=tm_params, dg_params=dg_params):
+            right_ok = not has_multiple_binding_sites(row['pRight_Sequences'], genome, similarity_threshold, min_tm, max_dg, tm_params=tm_params, dg_params=dg_params):
             if left_ok == True and right_ok == True:
                 row_df = pd.DataFrame(row).T
-                # primer_pool.extend(row[['pLeft_Sequences','pRight_Sequences']].values.tolist())
-                primer_pool.append(complement_sequence(row['pLeft_Sequences']))
-                primer_pool.append(row['pRight_Sequences'])
+                primer_pool.extend(row[['pLeft_Sequences','pRight_Sequences']].values.tolist())
                 # print(row)
                 accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair {i} accepted')
-                print('***')
                 break
             else:
-                if i == df.shape[0]:
-                    print(f'!!!No suitable primer found:form covered_range[seq], please manually inspect the sequence')
-                    no_primer.append(seq)
-                    continue
-                else:
-                    print(f'Primer pair {i} has alternative binding site')
-                continue
-    return primer_pool, accepted_primersm, no_primer
+                continue 
+    return primer_pool, accepted_primers
 
 #%%
 # primer_pool = []

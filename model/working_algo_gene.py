@@ -16,10 +16,14 @@ import json
 from imp import reload
 import primer_selection
 reload(primer_selection)
-# import testing
-# reload(testing)
+import Amplicone_no
+reload(Amplicone_no)
+import argparse
+from functools import reduce
+import os
 
 #%%
+
 def value_counts_list(lst):
     """
     Computes the frequency count of unique elements in a list and returns a dictionary, sorted by frequency count in
@@ -55,27 +59,13 @@ def print_full(x):
     pd.reset_option('display.max_colwidth')
 
 #%%
-# raw_data = pd.read_csv("https://raw.githubusercontent.com/GaryNapier/tb-lineages/main/fst_results_clean_fst_1_for_paper.csv")
-# raw_data['weight'] = sample(range(1, 10000), raw_data.shape[0])
-# raw_data['weight'] = raw_data['weight'] / 100
-# raw_data = raw_data.sort_values(by=['Pos'])
-# raw_data = raw_data.reset_index(drop=True)
 full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
 full_data = full_data[~full_data['drugs'].isna()]
 full_data = full_data.sort_values(by=['genome_pos'])
 full_data = full_data.reset_index(drop=True)
 full_data['weight'] = full_data['freq']
-#%%
-# snp_weight = full_data['sample_id'].value_counts()/full_data['sample_id'].value_counts().max()
-# snp_weight = snp_weight.to_frame()
+ref_genome = 'MTB-h37rv_asm19595v2-eg18.fa'
 
-#%%
-# full_data['weight'] = 0
-# full_data = full_data.merge(snp_weight, left_on='sample_id', right_index=True, how='left')
-# merged_data = merged_data.sort_values(by=['genome_pos'])
-# merged_data = merged_data.reset_index(drop=True)
-
-# merged_data['weight'].fillna(value=0, inplace=True)
 tb_drug_resistance_genes = {
     'gyrB': ['Levofloxacin'],
     'gyrA': ['Levofloxacin'],
@@ -129,33 +119,33 @@ def rolling_sum(df, weight, window_size, genomic_pos):
         rolling_sum.append(freq_sum)
     return rolling_sum
 
-# test = rolling_sum(full_data, 400, full_data['genome_pos'].tolist())
+def genome_size(fasta_file):
+    total_length = 0
+    with open(fasta_file, 'r') as file:
+        for line in file:
+            if not line.startswith('>'):
+                total_length += len(line.strip())
+    return total_length
 
-#%% trial
-# window_size = 400
-# pos = full_data['genome_pos'].unique()
-# rolling_sum = []
-# for x in pos:
-#     start = x
-#     in_range = [i for i in pos if i <= start+window_size]
-#     end = min(in_range, key=lambda x:abs(x-(start+window_size)))
-#     freq_sum = full_data[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end)]['freq'].sum()
-#     rolling_sum.append(freq_sum)
-# full_data['weight'].min()
-#%%
+
 #Full data trial
-def place_amplicone(full_data, read_number, read_size, graphic_output=False):
+def place_amplicone(full_data, read_number, read_size, graphic_output=False, ref_size = genome_size(ref_genome)):
     read_number = read_number
     read_size = read_size
     window_size = read_size
+    run = 0
+    full_data_cp = full_data.copy()
     # priorities = []
     graph_output = False # set to True to see the graph output
-    weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-    pos = full_data['genome_pos'].unique()
+    weight_window_sum = rolling_sum(full_data_cp, 'weight', window_size, full_data_cp['genome_pos'].tolist())
+    pos = full_data_cp['genome_pos'].unique()
     covered_positions = {}
     covered_ranges = []
+    reduce_amplicone = 0
     print('Placing Amplicones...')
-    for run in tqdm(range(0,read_number)):
+    # for run in tqdm(range(0,read_number)):
+    while run < read_number:
+        print(f'Amplicone #{run+1}')
         while graph_output:
             trace = go.Scatter(
             x=list(range(1, len(weight_window_sum) + 1)),
@@ -190,36 +180,28 @@ def place_amplicone(full_data, read_number, read_size, graphic_output=False):
         # in_range = [i for i in pos if i <= start+window_size] # find all values in the window
         # end = min(in_range, key=lambda x:abs(x-(start+window_size))) # find the closest value to the end of the window
         end = start+window_size
-        if end > 4485058:
-            end = 4485058-200
-        # if len(covered_ranges) != 0:
-        #     pass
-        # break
-        # elif len(covered_ranges) > 0:
-        #     for i in range(len(covered_ranges)):
-        #         if start > covered_ranges[i][0] and start < covered_ranges[i][1]:
-        #             start_index = pos.index(covered_ranges[i][1])+1
-        #             start = pos[start_index]
-        #             if covered_ranges[i][1]+1 + read_size > full_data.shape[0]:
-        #                 end = full_data.shape[0]
-        #             end = covered_ranges[i][1]+1 + read_size
-        #         if end > covered_ranges[i][0] and end < covered_ranges[i][1]:
-        #             end = covered_ranges[i][0]-1
-        #             if covered_ranges[i][0]-1 - read_size < 0:
-        #                 start = 0
-        #             start = covered_ranges[i][0]-1 - read_size
-        # else:
-        #     print('error')
-        # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[['genome_pos','gene','sublin','drtype','drugs','weight']][start:end].sort_values(by=['weight']).to_dict('records')} 
-        covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
-        # covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}}  # concise version of output
-        covered_ranges.append([start, end])
-        # 
-        # full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = 0 # set the weight of the covered positions to 0
-        full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
-        weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-    #! full data needs to be reloaded after each run
+        if end >  ref_size:
+            end =  ref_size-200
+
+        full_data_cp.loc[(full_data_cp['genome_pos']>=start) & (full_data_cp['genome_pos']<=end), 'weight'] = full_data_cp.loc[(full_data_cp['genome_pos']>=start) & (full_data_cp['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
+        if [start, end] in covered_ranges:
+            # print(full_data_cp)
+            # print(full_data_cp.loc[(full_data_cp['genome_pos']>=start) & (full_data_cp['genome_pos']<=end)]['weight'].values)
+            print('Already covered, consider reducing amplicone number.. Finding alternative sequence...')
+            reduce_amplicone += 1
+        else:
+            run += 1
+            covered_ranges.append([start, end])
+            covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data_cp[(full_data_cp['genome_pos']>= start) & (full_data_cp['genome_pos']<=end)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
+            # print(full_data_cp.loc[(full_data_cp['genome_pos']>=start) & (full_data_cp['genome_pos']<=end)]['weight'].values)
+            # print('==============')
+        weight_window_sum = rolling_sum(full_data_cp, 'weight', window_size, full_data_cp['genome_pos'].tolist())
+    print('====================')
+    print(f'Consider reducing number of amplicones by: {reduce_amplicone}')
+    print('====================')
+
     return covered_positions, covered_ranges
+
 #%%
 read_size = 1000
 specific_gene = ['katG']
@@ -229,28 +211,63 @@ specific_gene_data = full_data[full_data['gene'].isin(specific_gene)]
 non_specific_gene_data = full_data[~full_data['gene'].isin(specific_gene)]
 
 covered_positions, covered_ranges = [], []
-covered_positions_sp, covered_ranges_sp = place_amplicone(specific_gene_data, specific_gene_amplicone, read_size)
-covered_positions_nosp, covered_ranges_nosp = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size)
-covered_positions = {**covered_positions_sp, **covered_positions_nosp}
-covered_ranges = covered_ranges_sp + covered_ranges_nosp
+if len(specific_gene)>0:
+    covered_positions_sp, covered_ranges_sp = place_amplicone(specific_gene_data, specific_gene_amplicone, read_size, genome_size(ref_genome))
+    covered_positions_nosp, covered_ranges_nosp = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size, genome_size(ref_genome))
+    covered_positions = {**covered_positions_sp, **covered_positions_nosp}
+    covered_ranges = covered_ranges_sp + covered_ranges_nosp
+
+else:
+    covered_positions_nosp, covered_ranges_nosp = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size, genome_size(ref_genome))
+    covered_positions = covered_positions_nosp
+    covered_ranges = covered_ranges_nosp
+
+#%%
+spoligotype = True
+if spoligotype:
+    spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
+    spacers = np.array(spacers)
+    spacers = spacers[:, 1:3]
+    spacers = spacers.tolist()
+    flattened_data = [item for sublist in spacers for item in sublist]
+    spacer_max = max(flattened_data)
+    spacer_min = min(flattened_data)
+    spol_list = np.arange(spacer_min-400,spacer_max+400,1)
+    weight = [0.01]*len(spol_list) 
+    spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
+    # Create a list of boolean masks, one for each range
+    masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
+    # Use reduce and the | operator to combine the masks into a single mask
+    combined_mask = reduce(lambda x, y: x | y, masks)
+    # Use .loc and the combined mask to update the weight column
+    spol_data.loc[combined_mask, 'weight'] = 1
+    covered_ranges_spol  = Amplicone_no.place_amplicone_spol(spol_data, 1, read_size, graphic_output=False, ref_size = genome_size(ref_genome))
+    covered_ranges.extend(covered_ranges_spol)
+    read_number = specific_gene_amplicone + non_specific_amplicone + len(covered_ranges_spol)
+
 #%%
 # output
 # seq = 1
+output_path = '.'
+op = f'{output_path}/Amplicone_design_output'
+os.makedirs(op, exist_ok=True) #output path
+ref_size = genome_size(ref_genome)
 padding = 150
 accepted_primers = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
 primer_pool = []
+no_primer = []
 print('Designing primers...')
 for i, x in tqdm(enumerate(covered_ranges)):
     low_b = x[0]
     high_b = x[1]
     if low_b <= padding:
         low_b = 151
-    elif high_b >= 4411532-padding:
-        high_b = 4411532-padding
+    elif high_b >= ref_size-padding:
+        high_b = ref_size-padding
     # if high_b - low_b < 300:
     #     high_b+= 150
     #     low_b-= 150
-    if (high_b - low_b) < 350:
+    if (high_b - low_b) < padding*2+50:
         # print('======')
         high_b+= 450
     else:
@@ -258,14 +275,24 @@ for i, x in tqdm(enumerate(covered_ranges)):
         low_b-= padding
 
     # seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
-    seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=padding)
+    seq_template = primer_selection.extract_sequence_from_fasta(low_b, high_b, padding=0) #set to 0 to avoid padding again
     # print(low_b, high_b)
     # print(seq_template)
     # print(x)
     # print(seq_template)
-    primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding)
+    primer_pool, accepted_primers, no_primer_ = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome)
 
-#%%
+    no_primer.extend(no_primer_)
+    
+primer_label = ['Gene_specific']*specific_gene_amplicone + ['Non_specific']*non_specific_amplicone + ['Spoligotype']*len(covered_ranges_spol)
+
+for x in no_primer:
+    {f'Designed covered_ranges[{x}] cannot be found'}
+    my_list.pop(x)
+
+accepted_primers['Amplicone_type'] = primer_label
+accepted_primers.to_csv(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv')
+
 primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
 columns = ['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord', 'SNP_inclusion']
 
@@ -278,12 +305,13 @@ for i, row in accepted_primers.iterrows():
     info['SNP_inclusion'] = ','.join(SNP)
     primer_inclusion.loc[len(primer_inclusion)] = info.tolist()
 
-primer_inclusion.to_csv('primer_inclusion.csv')
-#%% Evaluation
+primer_inclusion.to_csv(f'{op}/SNP_inclusion.csv')
+#%%
+# Evaluation
     # print(accepted_primers)
 columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin', 'drtype', 'drugs', 'weight']
 
-# Create an empty DataFrame with the specified column headings
+# Create an empty DataFrame with the specified column headingsref_genome
 designed =pd.DataFrame(columns=columns)
 
 # Create DataFrame
@@ -303,9 +331,9 @@ columns = ['sample_id', 'genome_pos', 'gene', 'change', 'freq', 'type', 'sublin'
 # Create an empty DataFrame with the specified column headings
 tested =pd.DataFrame(columns=columns)
 
-variants_dr = []
-tested_dr = []
-variants = pd.read_csv('/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/variants.txt')
+variants_dr = [] # all the drugs that have variants
+tested_dr = [] # all the drugs that have been covered by the primers
+variants = pd.read_csv('/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/variants.txt') # put in the reference genome to test for
 variants = variants[~variants['drugs'].isna()]
 
 for x in variants['drugs'].values:
@@ -321,42 +349,7 @@ for x in primer_pos:
 
 for x in tested['drugs'].values:
     tested_dr.extend(x.split(','))
-
-#%%
-def value_counts_list(lst):
-    """
-    Computes the frequency count of unique elements in a list and returns a dictionary, sorted by frequency count in
-    descending order.
-
-    Args:
-    - lst (list): List of elements
-
-    Returns:
-    - dict: Dictionary with unique elements as keys and their frequency count as values, sorted by frequency count
-      in descending order
-    """
-    value_counts = {}
-    for item in lst:
-        if item in value_counts:
-            value_counts[item] += 1
-        else:
-            value_counts[item] = 1
-    sorted_value_counts = dict(sorted(value_counts.items(), key=lambda x: x[1], reverse=True))
-    return sorted_value_counts
-
-def print_full(x):
-    pd.set_option('display.max_rows', None)
-    pd.set_option('display.max_columns', None)
-    pd.set_option('display.width', 2000)
-    pd.set_option('display.float_format', '{:20,.2f}'.format)
-    pd.set_option('display.max_colwidth', None)
-    print(x)
-    pd.reset_option('display.max_rows')
-    pd.reset_option('display.max_columns')
-    pd.reset_option('display.width')
-    pd.reset_option('display.float_format')
-    pd.reset_option('display.max_colwidth')
-#%%
+    
 variants_dr_ = value_counts_list(variants_dr)
 tested_dr_ = value_counts_list(tested_dr)
 
@@ -372,172 +365,30 @@ for x,y in variants_dr_.items():
     else:
         percent.append(0/variants_dr_[x])
         ratio.append(f'0/{variants_dr_[x]}')
-    
 
 evaluation_df = pd.DataFrame({'Drug':dr, 'Ratio detected':ratio, 'Percentage detected':percent})
+evaluation_df.to_csv(f'{op}/Primer_design-Percentage_gene_covered.csv')
 
 #%%
-# print('======')
-    # print(amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001))
-    # ratio = amplified_segment.shape[0]/(covered_segment.shape[0]+0.00001)
-    # # if ratio < 0.85:
-        
-    # print('======')
+def main():
+    print(args.argument_name)
+
+# %%
+if __name__ == "_main__":
+    parser = argparse.ArgumentParser(description='Amplicone design',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    # in
+    parser.add_argument('--SNP_priority', type = str, help = 'SNP_priority CSV files', default='variants.csv')
+    parser.add_argument('--Amplicon_size', type = int, help = 'Amplicon size', default=1000)
+    parser.add_argument('--Reference_genome', type = str, help = 'reference file', default='MTB-h37rv_asm19595v2-eg18.fa')
+    parser.add_argument('--specific_amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying specific genes', default=0)
+    parser.add_argument('--specific_amplicone_gene', type = str, help = 'give a list of fene names separated by Lineage ', default='')
+    parser.add_argument('--Non_specific_amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying all SNPs in all genes according the importants list', default=30)
     
-    # if amplified_segment.shape[0]/covered_segment.shape[0] < 0.5:
-    #     print()
-    # break
-# accepted_primers.to_csv(f'output/accepted_primers-{read_number}-{read_size}.csv')
-
-# output covered position info into a json file
-class NpEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.integer):
-            return int(obj)
-        if isinstance(obj, np.floating):
-            return float(obj)
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        return super(NpEncoder, self).default(obj)
-
-# output covered coordinates into a bed file
-bed_file_path = f"output/intervals-{read_number}-{read_size}.bed"
-
-with open(bed_file_path, "w") as bed_file:
-    for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
-        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
-        bed_file.write(bed_line)
-
-run = 0
-covered_positions = {}
-for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
-    # print(start, end)
-    covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','change','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
-    run+=1
-out_file = open(f"output/covered_positions-{read_number}-{read_size}.json", "w")
-
-json.dump(covered_positions, out_file, cls=NpEncoder, indent = 6)
-
-out_file.close()
-print(f'Output_file:{read_number}-{read_size}')
-# testing.test_coverage(bed_file_path, full_data, tb_drug_resistance_genes.keys())
-
-#%% 
-tb_genes = tb_drug_resistance_genes.keys()
-destination_df = pd.DataFrame(columns=full_data.columns)
-for interval in covered_ranges:
-    segment = full_data[(full_data['genome_pos']>= interval[0])&(full_data['genome_pos']<= interval[1])]
-    destination_df = pd.concat([destination_df, segment])
-destination_df = destination_df.drop_duplicates(keep='first')
-
-for i, x in full_data['gene'].value_counts().items():
-    if i in destination_df['gene'].value_counts().keys():
-        if i in tb_genes:
-            print(i, np.round(destination_df['gene'].value_counts()[i]/full_data['gene'].value_counts()[i],2), '<--')
-        else:
-            print(i, np.round(destination_df['gene'].value_counts()[i]/full_data['gene'].value_counts()[i],2))
-    else:
-        if i in tb_genes:
-            print(i, 0, '<--')
-        else:
-            print(i, 0)
-
-
-#%%
-run = 0
-covered_positions = {}
-for start, end in zip(accepted_primers['pLeft_coord'],accepted_primers['pRight_coord']+accepted_primers['pRight_length']):
-    print(start, end)
-    covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}, 'Markers':full_data[(full_data['genome_pos']>= start) & (full_data['genome_pos']<=end)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')}# verbose version of output
-    run+=1
-
-
-#%% checking
-full_data[(full_data['genome_pos']>=761004) & (full_data['genome_pos']<761284)]
-full_data[full_data['genome_pos']<window_size]
-full_data[(full_data['genome_pos']>=183247) & (full_data['genome_pos']<=761284)]
-
-#%% checking
-# for x in covered_ranges:
-#     print(x)
-#     print(x[1]-x[0])
-
-#%%
-for i,e in covered_positions.items():
-    print(i, e['Range']['Start'], e['Range']['End'])
-    print(len(e['Markers']))
-    # print(e['Markers'])
-    weight = 0
-    gene = []
-    for x in e['Markers']:
-        weight += x['weight']
-        gene.append(x['gene'])
-    print(weight)
-    print(value_counts_list(gene))
-    print('------------------')
-#%%
-# full_data[(full_data['genome_pos']>= 4247186) & (full_data['genome_pos']<=4248186)]['genome_pos','gene','sublin','drtype','drugs','weight'].sort_values(by=['weight'])
-full_data[(full_data['genome_pos']>= 4247186) & (full_data['genome_pos']<=4248186)][['genome_pos','gene','sublin','drtype','drugs','weight']].sort_values(by=['weight']).to_dict('records')
-#%%
-#Full data trial with coverage percentage
-percentage_cover = 0.95
-read_size = 1000
-window_size = read_size
-# priorities = []
-covered_percentage = 0
-
-weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-pos = full_data['genome_pos'].unique()
-covered_positions = {}
-covered_ranges = []
-covered_snps = []
-# for run in tqdm(range(0,read_number)):
-run = 0
-while covered_percentage < percentage_cover:
-    print(f'{np.round(covered_percentage,3)}-->{percentage_cover}')
-    start = pos[np.argmax(weight_window_sum)] # find the index of the max value in the rolling sum
-    in_range = [i for i in pos if i <= start+window_size]
-    end = min(in_range, key=lambda x:abs(x-(start+window_size)))
-
-    covered_positions[f'Amplicon_{run+1}'] = {'Range':{'Start': start, 'End': end}}  # concise version of output
-    covered_ranges.append([start, end])
-    run +=1
-    # 
-    # full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = 0 # set the weight of the covered positions to 0
-    full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight'] = full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'weight']/10 # set the weight of the covered positions to 0
-    weight_window_sum = rolling_sum(full_data, 'weight', window_size, full_data['genome_pos'].tolist())
-    covered_snps.extend(list(full_data.loc[(full_data['genome_pos']>=start) & (full_data['genome_pos']<=end), 'sample_id'].values))
-
-    covered_snps = list(set(covered_snps))
-    covered_percentage = len(covered_snps)/full_data['sample_id'].nunique()
-print(f'{np.round(covered_percentage,3)}-->{percentage_cover}')
-print(f'{len(covered_positions)} amplicons needed to cover {percentage_cover} of the knowns SNPs')
-
-#%%
-# output covered position into a bed file
-bed_file_path = "intervals1kbps95.bed"
-
-with open(bed_file_path, "w") as bed_file:
-    for interval in covered_ranges:
-        start = interval[0]
-        end = interval[1]
-        bed_line = f"chr1\t{start}\t{end}\n"  # Modify "chr1" with the appropriate chromosome name
-        bed_file.write(bed_line)
-            
-# %%
-list(full_data.loc[(full_data['genome_pos']>=1) & (full_data['genome_pos']<=10000), 'sample_id'].values)
-
-
-
-# %%
-# Extracting the sequence from a ref genome
-
-# # Example usage
-# fasta_file = 'MTB-h37rv_asm19595v2-eg18.fa'
-# sequence_id = 'Chromosome'
-# start_pos = 0
-# end_pos = 20
-
-
-
-# %%
+    parser.add_argument('--Spoligo_sequencing', type = bool, help = 'Whether to amplify Spoligotype', default=False)
+    # out
+    parser.add_argument('--output_folder_path', default = '', type = str, help = 'output_folder_path (accepted_primers, SNP_inclusion, gene_covered)')
+    parser.set_defaults(func=main)
+    args = parser.parse_args()
+    args.func(args)
+    main(args)
