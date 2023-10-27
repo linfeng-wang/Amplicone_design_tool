@@ -23,6 +23,8 @@ import argparse
 from functools import reduce
 import os
 import time
+import plotting
+reload(plotting)
 #%%
 def value_counts_list(lst):
     """
@@ -95,7 +97,9 @@ tb_drug_resistance_genes = {
     'gid': ['Streptomycin']
 }
 
+
 full_data.loc[full_data['gene'].isin(tb_drug_resistance_genes.keys()), 'weight'] += 0.5
+full_data.to_csv('snp_priority.csv', index=False)
 
 def rolling_sum(df, weight, window_size, genomic_pos):
     """
@@ -152,7 +156,8 @@ def extraction_prep(x, ref_size= genome_size(ref_genome), padding=150):
     return seq_template, low_b, high_b
 
 #%%
-#Full data trial
+ideal_range = []
+#place_amplicone function
 def place_amplicone(full_data, read_number, read_size, primer_pool, accepted_primers, no_primer_, graphic_output=False, ref_size = genome_size(ref_genome),padding=150, output_path = '.'):
     start = time.time()
 
@@ -222,7 +227,8 @@ def place_amplicone(full_data, read_number, read_size, primer_pool, accepted_pri
         end_r = start_r+window_size
         if end_r > ref_size:
             end_r = ref_size-200
-
+        
+        ideal_range.append([start_r, end_r])
 
         seq_template, low_b, high_b = extraction_prep([start_r, end_r], ref_size=genome_size(ref_genome), padding=padding)
         primer_pool, accepted_primers, no_primer = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, run+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
@@ -236,8 +242,10 @@ def place_amplicone(full_data, read_number, read_size, primer_pool, accepted_pri
         # print('---WindowMean', np.mean(weight_window_sum))
         # print('---Min', full_data_cp['weight'].min())
         # print('---Mean', full_data_cp['weight'].mean())
-        
-        full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = full_data_cp['weight'].min()/10  # set the weight of the covered positions smaller
+        # c = full_data_cp[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p)].shape[0]
+        c = full_data_cp.shape[0]
+        # full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = full_data_cp['weight'].min()/10/c  # set the weight of the covered positions smaller
+        full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = 0 # set the weight of the covered positions smaller
         # print(start_p, end_p)
         # full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight']/100 # set the weight of the covered positions smaller
         # print(full_data_cp[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p)]['weight'])
@@ -248,8 +256,11 @@ def place_amplicone(full_data, read_number, read_size, primer_pool, accepted_pri
 # full_data_cp[(full_data_cp['genome_pos']>=1673373) & (full_data_cp['genome_pos']<=1674373)]
         if [start_p, end_p] in covered_ranges:
             if pos[np.argmax(weight_window_sum)] == start_r:
-                # full_data_cp.loc[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r), 'weight'] = full_data_cp.loc[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r), 'weight']/50 # set the weight of the covered positions smaller
-                full_data_cp.loc[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r), 'weight'] = full_data_cp['weight'].min()/10 # set the weight of the covered positions smaller
+                # c = full_data_cp[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r)].shape[0]
+                c = full_data_cp.shape[0]
+                
+                # full_data_cp.loc[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r), 'weight'] = full_data_cp['weight'].min()/10/c # set the weight of the covered positions smaller
+                full_data_cp.loc[(full_data_cp['genome_pos']>=start_r) & (full_data_cp['genome_pos']<=end_r), 'weight'] = 0 # set the weight of the covered positions smaller
             # this is when problem comes, there is a difference in range coverage according to the design by weighted sum, however the actual range obtained from designed primers are dont cover the same range, hence the sae primers are repeatedly designed 
             print('Already covered, consider reducing amplicone number...Finding alternative sequence...')
             reduce_amplicone += 1
@@ -278,13 +289,6 @@ def place_amplicone(full_data, read_number, read_size, primer_pool, accepted_pri
     return covered_positions, covered_ranges, full_data_cp, primer_pool, accepted_primers, no_primer_
 
 
-
-#%%
-print(primer_selection.extract_sequence_from_fasta(1573373, 1674373, padding=150/2))
-
-
-
-
 #%%
 # read_size = 1000
 read_size = 400
@@ -306,6 +310,7 @@ non_specific_gene_data = full_data
 ref_size = genome_size(ref_genome)
 specific_gene_data_count = 0
 output_path = '.'
+
 
 # Calculating number of amplicone needed
 # target_coverage = 1
@@ -367,7 +372,7 @@ accepted_primers['Designed_ranges'] = covered_ranges
 
 op = f'{output_path}/Amplicon_design_output'
 os.makedirs(op, exist_ok=True) #output path
-accepted_primers.to_csv(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv',index=True)
+accepted_primers.to_csv(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv',index=False)
 
 primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
 columns = ['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord', 'SNP_inclusion']
@@ -381,7 +386,7 @@ for i, row in accepted_primers.iterrows():
     info['SNP_inclusion'] = ','.join(SNP)
     primer_inclusion.loc[len(primer_inclusion)] = info.tolist()
 
-primer_inclusion.to_csv(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv',index=True)
+primer_inclusion.to_csv(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv',index=False)
 
 print('Primer design output files:')
 print(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv')
@@ -450,32 +455,196 @@ op = f'{output_path}/Eval'
 os.makedirs(op, exist_ok=True) #output path
 
 evaluation_df = pd.DataFrame({'Drug':dr, 'Ratio detected':ratio, 'Percentage detected':percent})
-evaluation_df.to_csv(f'{op}/Primer_design-Percentage_gene_covered-{read_number}-{read_size}.csv',index=True)
+evaluation_df.to_csv(f'{op}/Primer_design-Percentage_gene_covered-{read_number}-{read_size}.csv',index=False)
 print('Evalutation output files:')
 print(f'{op}/Primer_design-Percentage_gene_covered-{read_number}-{read_size}.csv')
 
-
+#%%
+#Plotting coverage
+plotting.gene_coverage_plot(read_size, full_data, gene_range='regions.bed', tb_drug_resistance_genes= tb_drug_resistance_genes, output_path = output_path)
+    
 
 #%%
 def main(args):
-    print(args.amplicone_size)
+    # Rationale:
+    # This program is designed to perform primer design for PCR amplification,
+    # taking into consideration various parameters such as amplicon size, SNP priority,
+    # reference genome, and more. It also allows users to specify particular amplicons
+    # based on gene names and offers graphical output options. Users can also choose to
+    # include spoligotyping sequencing information. The program outputs results to a 
+    # specified folder.
 
+    # Displaying the User Settings for Verification:
+    print("========== User Settings ==========")
+    print(f"Amplicon Size: {args.amplicone_size}")
+    print(f"SNP Priority: {args.snp_priority}")
+    print(f"Reference Genome: {args.reference_genome}")
+    if args.padding_size == None:
+        print(f"Padding_size: {args.amplione_size/4}")
+    else:
+        print(f"Padding_size: {args.padding_size}")
+    print(f"Specific Amplicon Number: {args.specific_amplicone_no}")
+    if args.specific_amplicone_no > 0:
+        print(f"Specific Amplicon Gene: {args.specific_amplicone_gene}")
+    print(f"Non-specific Amplicon Number: {args.non_specific_amplicone_no}")
+    print(f"Graphic Option: {args.graphic_option}")
+    print(f"Spoligo Sequencing: {args.spoligo_sequencing}")
+    if args.spoligo_sequencing:
+        if args.spoligo_sequencing_file == None:
+            print(f"Spoligo Sequencing File: default MTB spoligotype spacer range file")
+        else:
+            print(f"Spoligo Sequencing File: {args.spoligo_sequencing_file}")
+    print(f"Output Folder Path: {args.output_folder_path}")
+    
+    print("==================================")
+
+
+    # read_size
+    read_size = args.amplicone_size
+    # full data - priority file with weights&frequency for each snp
+    if args.snp_priority:
+        full_data= pd.read_csv(args.snp_priority)
+    else:
+        full_data = pd.read_csv('snp_priority.csv')
+    # paddding size
+    if args.padding_size == None:
+        padding = int(read_size/4)
+    else:
+        padding = args.padding_size
+
+    # Reference Genome
+    ref_genome = args.reference_genome
+    
+    #specific_genes
+    if args.pecific_amplicone_gene:
+            specific_gene = args.pecific_amplicone_gene.split(',')
+    else:
+        specific_gene = []
+        
+    non_specific_gene = []
+    # specific_gene_amplicone
+    specific_gene_amplicone = args.specific_amplicone_no
+    # non_specific_amplicone
+    non_specific_amplicone = args.non_specific_amplicone_no
+    # this is way we separate the specific and non-specific amplicones
+    # specific_gene_data = full_data[full_data['gene'].isin(specific_gene)]
+    # non_specific_gene_data = full_data[~full_data['gene'].isin(specific_gene)]
+    # this way we still have non specific amplicones incorporate the specific genes
+    specific_gene_data = full_data[full_data['gene'].isin(specific_gene)]
+    non_specific_gene_data = full_data
+    ref_size = genome_size(ref_genome)
+    specific_gene_data_count = 0
+    #main output folder path
+    output_path = args.output_folder_path
+
+
+    # Calculating number of amplicone needed
+    # target_coverage = 1
+    # gene_coverage = Amplicone_no.place_amplicone_search(full_data, target_coverage, read_size, genome_size(ref_genome))
+
+    covered_positions, covered_ranges = [], []
+    primer_pool, no_primer_ = [], []
+    accepted_primers = pd.DataFrame(columns = ['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC',
+        'pLeft_Sequences', 'pLeft_EndStability', 'pRight_ID', 'pRight_coord',
+        'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences',
+        'pRight_EndStability', 'Penalty', 'Product_size'])
+
+    if len(specific_gene)>0:
+        print('=====Specific amplicon=====')
+        covered_positions_sp, covered_ranges_sp, specific_gene_data, primer_pool, accepted_primers, no_primer_ = place_amplicone(specific_gene_data, specific_gene_amplicone, read_size, primer_pool, accepted_primers, no_primer_, genome_size(ref_genome),padding=padding, output_path =output_path)
+        specific_gene_data_count = accepted_primers.shape[0]                                                  
+        print('=====Non-specific amplicon=====')
+        non_specific_gene_data.update(specific_gene_data) # add the specific gene data to the non-specific gene data
+        covered_positions_nosp, covered_ranges_nosp, full_data_cp, primer_pool, accepted_primers, no_primer_ = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size, primer_pool, accepted_primers, no_primer_, genome_size(ref_genome),padding=padding, output_path =output_path)
+        covered_positions = {**covered_positions_sp, **covered_positions_nosp}
+        covered_ranges = covered_ranges_sp + covered_ranges_nosp
+        non_specific_gene_data_count = accepted_primers.shape[0] - specific_gene_data_count
+        
+    else:
+        covered_positions_nosp, covered_ranges_nosp, full_data_cp, primer_pool, accepted_primers, no_primer_ = place_amplicone(non_specific_gene_data, non_specific_amplicone, read_size, primer_pool, accepted_primers, no_primer_,genome_size(ref_genome),padding=padding, output_path =output_path)
+        covered_positions = covered_positions_nosp
+        covered_ranges = covered_ranges_nosp
+        non_specific_gene_data_count = accepted_primers.shape[0]
+    
+    # whether or not you wanna include spoligotyping sequencing
+    spoligotype = args.spoligo_sequencing
+    covered_ranges_spol = []
+    if spoligotype:
+        
+        if args.spoligo_sequencing_file == None:
+            spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
+        else:
+            spacers = pd.read_csv(args.spoligo_sequencing_file, sep='\t', header=None)
+        spacers = np.array(spacers)
+        spacers = spacers[:, 1:3]
+        spacers = spacers.tolist()
+        flattened_data = [item for sublist in spacers for item in sublist]
+        spacer_max = max(flattened_data)
+        spacer_min = min(flattened_data)
+        spol_list = np.arange(spacer_min-400,spacer_max+400,1)
+        weight = [0.01]*len(spol_list) 
+        spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
+        # Create a list of boolean masks, one for each range
+        masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
+        # Use reduce and the | operator to combine the masks into a single mask
+        combined_mask = reduce(lambda x, y: x | y, masks)
+        # Use .loc and the combined mask to update the weight column
+        spol_data.loc[combined_mask, 'weight'] = 1
+        covered_ranges_spol = Amplicone_no.place_amplicone_spol(spol_data, 1, read_size, graphic_output=False, ref_size = genome_size(ref_genome))
+        covered_ranges.extend(covered_ranges_spol)
+
+    read_number = specific_gene_data_count + non_specific_gene_data_count + len(covered_ranges_spol)
+
+    # output
+    primer_label = ['Gene_specific']*specific_gene_data_count + ['Non_specific']*non_specific_gene_data_count + ['Spoligotype']*len(covered_ranges_spol)
+
+    accepted_primers['Amplicone_type'] = primer_label
+    accepted_primers['Redesign'] = no_primer_
+    accepted_primers['Designed_ranges'] = covered_ranges
+
+    op = f'{output_path}/Amplicon_design_output'
+    os.makedirs(op, exist_ok=True) #output path
+    accepted_primers.to_csv(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv',index=False)
+
+    primer_pos = accepted_primers[['pLeft_coord','pRight_coord']].values
+    columns = ['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord', 'SNP_inclusion']
+
+    # Create an empty DataFrame with the specified column headings
+    primer_inclusion =pd.DataFrame(columns=columns)
+    for i, row in accepted_primers.iterrows():
+        data = full_data[(full_data['genome_pos']>= row['pLeft_coord']) & (full_data['genome_pos']<= row['pRight_coord'])]    
+        info = row[['pLeft_ID', 'pRight_ID', 'pLeft_coord', 'pRight_coord']]
+        SNP = data['gene'].str.cat(data['change'], sep='-').unique()
+        info['SNP_inclusion'] = ','.join(SNP)
+        primer_inclusion.loc[len(primer_inclusion)] = info.tolist()
+
+    primer_inclusion.to_csv(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv',index=False)
+
+    print('Primer design output files:')
+    print(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv')
+    print(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv')
 # %%
-if __name__ == "_main__":
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Amplicone design',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     # in
-    parser.add_argument('-s','--snp-priority', type = str, help = 'SNP_priority CSV files', default='variants.csv')
-    parser.add_argument('-a','--amplicon-size', type = int, help = 'Amplicon size', default=1000)
-    parser.add_argument('-ref','--reference-genome', type = str, help = 'reference file', default='MTB-h37rv_asm19595v2-eg18.fa')
-    parser.add_argument('-sn','--specific-amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying specific genes', default=0)
-    parser.add_argument('-sg','--specific-amplicone_gene', type = str, help = 'give a list of fene names separated by Lineage ', default='')
-    parser.add_argument('-nn','--non-specific-amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying all SNPs in all genes according the importants list', default=30)
+    parser.add_argument('-s','--snp_priority', type = str, help = 'SNP priority CSV files (default: collated global 50k clinical TB samples)', default='variants.csv', Default=None)
+    parser.add_argument('-a','--amplicon_size', type = int, help = 'Amplicon size', default=400)
+    parser.add_argument('-p','--padding_size', type = int, help = 'Size of padding on each side of the target sequence during primer design', default=None)
+    parser.add_argument('-ref','--reference_genome', type = str, help = 'reference fasta file (default: MTB-h37rv genome)', default='MTB-h37rv_asm19595v2-eg18.fa')
+    parser.add_argument('-sn','--specific_amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying specific genes', default=0)
+    parser.add_argument('-sg','--specific_amplicone_gene', type = str, help = 'give a list of gene names separated by Lineage ', default='')
+    parser.add_argument('-nn','--non-specific_amplicone_no', type = int, help = 'number of amplicone dedicated to amplifying all SNPs in all genes according the importants list', default=30)
+    parser.add_argument('-g','--graphic_option', action='store_true', default = False, help = 'output graphic on amplicone coverage')
     
-    parser.add_argument('-sp','--Spoligo_sequencing', action='store_true', help = 'Whether to amplify Spoligotype')
+    parser.add_argument('-sp','--spoligo_sequencing', action='store_true', help = 'Whether to amplify Spoligotype')
+    parser.add_argument('-sp_f','--spoligo_sequencing_file', type = str, help = 'Custom spoligotype range files (default: TB spligotype space ranges)', default = None)
     # out
     parser.add_argument('-op','--output_folder_path', default = '', type = str, help = 'output_folder_path (accepted_primers, SNP_inclusion, gene_covered)')
     parser.set_defaults(func=main)
     args = parser.parse_args()
-    args.func(args)
     main(args)
+    
+    
+# running
+# python your_script.py -a 400 -ref "MTB-h37rv_asm19595v2-eg18.fa" -sn 0 -nn 30 -g -sp -op "/mnt/storage10/lwang/Projects/Amplicone_design_tool/test_runs"

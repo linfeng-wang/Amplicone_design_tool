@@ -212,7 +212,7 @@ def place_amplicone_spol(full_data, target_coverage, read_size, graphic_output=F
         fig.show()
         fig.save('coverage_trace_spol.png')
     
-    print(f'{amplicon_number} amplicones are needed cover {coverage*100} percent SNPs')
+    print(f'{amplicon_number} amplicones are needed cover {round(coverage,1)*100} percent SNPs')
     # print(coverage_trace)
     return coverage_range
     
@@ -260,37 +260,37 @@ if __name__ == "__main__":
     amplicone_no()
     spol()
 
-# # %%
-# full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
-# full_data = full_data[~full_data['drugs'].isna()]
-# full_data = full_data.sort_values(by=['genome_pos'])
-# full_data = full_data.reset_index(drop=True)
-# full_data['weight'] = full_data['freq']
-# ref_genome = '/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/MTB-h37rv_asm19595v2-eg18.fa'
-# target_coverage = 0.9
-# read_size = 1000
-# gene_coverage = place_amplicone_search(full_data, target_coverage, read_size, genome_size(ref_genome))
-# print(gene_coverage)
-# #%%
-# spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
-# spacers = np.array(spacers)
-# spacers = spacers[:, 1:3]
-# spacers = spacers.tolist()
-# flattened_data = [item for sublist in spacers for item in sublist]
-# spacer_max = max(flattened_data)
-# spacer_min = min(flattened_data)
+# # # %%
+# # full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
+# # full_data = full_data[~full_data['drugs'].isna()]
+# # full_data = full_data.sort_values(by=['genome_pos'])
+# # full_data = full_data.reset_index(drop=True)
+# # full_data['weight'] = full_data['freq']
+# # ref_genome = '/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/MTB-h37rv_asm19595v2-eg18.fa'
+# # target_coverage = 0.9
+# # read_size = 1000
+# # gene_coverage = place_amplicone_search(full_data, target_coverage, read_size, genome_size(ref_genome))
+# # print(gene_coverage)
+# # #%%
+# # spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
+# # spacers = np.array(spacers)
+# # spacers = spacers[:, 1:3]
+# # spacers = spacers.tolist()
+# # flattened_data = [item for sublist in spacers for item in sublist]
+# # spacer_max = max(flattened_data)
+# # spacer_min = min(flattened_data)
 
-# spol_list = np.arange(spacer_min-300,spacer_max+300,1)
-# weight = [0.01]*len(spol_list) 
-# spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
-# # Create a list of boolean masks, one for each range
-# masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
+# # spol_list = np.arange(spacer_min-300,spacer_max+300,1)
+# # weight = [0.01]*len(spol_list) 
+# # spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
+# # # Create a list of boolean masks, one for each range
+# # masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
 
-# # Use reduce and the | operator to combine the masks into a single mask
-# combined_mask = reduce(lambda x, y: x | y, masks)
+# # # Use reduce and the | operator to combine the masks into a single mask
+# # combined_mask = reduce(lambda x, y: x | y, masks)
 
-# # Use .loc and the combined mask to update the weight column
-# spol_data.loc[combined_mask, 'weight'] = 1
+# # # Use .loc and the combined mask to update the weight column
+# # spol_data.loc[combined_mask, 'weight'] = 1
 
 # #%%
 # read_size = 1000
@@ -323,14 +323,12 @@ if __name__ == "__main__":
 
 #     primer_pool, accepted_primers = primer_selection.result_extraction(primer_pool, accepted_primers, seq_template, 1, padding)
 
-# #
-# # %%
+# #%%
 # accepted_primers1 = pd.DataFrame(columns=['pLeft_ID', 'pLeft_coord', 'pLeft_length', 'pLeft_Tm', 'pLeft_GC', 'pLeft_Sequences', 'pLeft_EndStability','pRight_ID', 'pRight_coord', 'pRight_length', 'pRight_Tm', 'pRight_GC', 'pRight_Sequences', 'pRight_EndStability', 'Penalty', 'Product_size'])
 # primer_pool1 = []
-# # seq_template1 = primer_selection.extract_sequence_from_fasta(3119505, 3120505, padding=0)
-# seq_template1 = primer_selection.extract_sequence_from_fasta(3119355, 3120655, padding=0)
-# primer_pool1, accepted_primers1 = primer_selection.result_extraction(primer_pool1, accepted_primers1, seq_template, 1, padding)
-
+# # seq_template1 = primer_selection.extract_sequence_from_fasta(2154853, 2155853, padding=0)
+# seq_template1 = primer_selection.extract_sequence_from_fasta(3121435-200, 3122435, padding=0)
+# primer_pool1, accepted_primers1 = primer_selection.result_extraction(primer_pool1, accepted_primers1, seq_template1, 1, padding)
 # #%%
 # from primer3 import bindings
 # sequence = seq_template1

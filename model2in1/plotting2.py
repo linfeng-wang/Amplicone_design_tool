@@ -63,8 +63,60 @@ full_data.loc[full_data['gene'].isin(tb_drug_resistance_genes.keys()), 'weight']
 susana_design = pd.read_excel('/mnt/storage10/lwang/Projects/Amplicone_design_tool/model2in1/amplicon_TB_2023_V2.xlsx', header = 0)
 susana_design = susana_design.iloc[:-3]
 # susana_design = susana_design['primer name'].contains('')
-#%%
 
+#%%
+ideal_ranges = [[761004, 761404],
+ [2154961, 2155361],
+ [4247393, 4247793],
+ [2288820, 2289220],
+ [781585, 781985],
+ [4247186, 4247586],
+ [1673373, 1673773],
+ [7247, 7647],
+ [2288528, 2288928],
+ [1472358, 1472758],
+ [4407756, 4408156],
+ [1473003, 1473403],
+ [2715339, 2715739],
+ [2715339, 2715739],
+ [1472035, 1472435],
+ [4243203, 4243603],
+ [4243203, 4243603],
+ [4247730, 4248130],
+ [4326074, 4326474],
+ [1674048, 1674448],
+ [4327084, 4327484],
+ [4326602, 4327002],
+ [1674048, 1674448],
+ [2726112, 2726512],
+ [764724, 765124],
+ [6575, 6975],
+ [4249389, 4249789],
+ [1674481, 1674881],
+ [2155462, 2155862],
+ [2747141, 2747541],
+ [4407543, 4407943],
+ [4327484, 4327884],
+ [3067958, 3068358],
+ [3067958, 3068358],
+ [1918292, 1918692],
+ [6575, 6975],
+ [2726112, 2726512],
+ [4325761, 4326161],
+ [3841083, 3841483],
+ [762089, 762489],
+ [762089, 762489],
+ [3841083, 3841483],
+ [4326265, 4326665]]
+
+#%%
+genes = pd.read_csv('MTB-h37rv_asm19595v2-eg18.gff', sep = '\t', header = None, skiprows=[0,1,2,3,4,5,6])
+genes = genes[genes[2]=='gene']
+genes['Name'] = genes[8].str.extract(r'Name=([^;]*)')
+genes = genes[[3,4,'Name']]
+genes.columns = ['start', 'end', 'gene']
+
+#%%
 gene_range = pd.read_csv('regions.bed', sep = '\t', header = 0)
 read_size = 400
 
@@ -88,21 +140,44 @@ for g in tb_drug_resistance_genes:
     full_gene['change'] = full_gene['change'].str.extract(r'([a-zA-Z]+\d+)')[0]
     full_gene = full_gene.groupby(['genome_pos', 'gene', 'change']).agg({'freq': 'sum'}).reset_index()
 
+    full_gene['freq'] = full_gene['freq'].apply(lambda x: max(x, 1))
+
+    
     snp_names = full_gene['change'].tolist()
     snp_frequency = full_gene['freq'].tolist()
     genomic_positions = full_gene['genome_pos'].tolist()
-    primers = pd.read_csv('./Amplicon_design_output/Primer_design-accepted_primers-10-1000.csv', index_col=False)
+    # primers = pd.read_csv('./Amplicon_design_output/Primer_design-accepted_primers-10-1000.csv', index_col=False)
     primers = pd.read_csv('./Amplicon_design_output/Primer_design-accepted_primers-35-400.csv', index_col=False)
-    primers.drop(columns=['Unnamed: 0'], inplace=True)
+    # primers.drop(columns=['Unnamed: 0'], inplace=True)
 
     df = pd.DataFrame({
         'Gene': snp_names,
-        'SNP_Frequency': snp_frequency,
+        'SNP_Frequency': np.log10(snp_frequency),
         'Genomic_Position': genomic_positions
     })
     if len(df) == 0:
+        print('---> No SNPs found in this gene')
         continue
-        
+# getting gene ranges   
+    genes_df = pd.DataFrame(columns=genes.columns.tolist())
+    for i, row in genes.iterrows():
+        in_range = False
+        start1 = row['start']
+        end1 = row['end']
+        start2 = df['Genomic_Position'].min()
+        end2 = df['Genomic_Position'].max()
+        if (start1 <= end2) and (end1 >= start2):
+            in_range = True    
+            # print(row.to_frame())
+            genes_df = pd.concat([genes_df, row.to_frame().T],axis = 0)
+    genes_positions = []
+    genes_names = []
+    print(genes_positions)
+    for i, row in genes_df.iterrows():
+        genes_positions.append((row['start'], row['end']))
+        genes_names.append(row['gene'])
+
+# getting designed amplicon ranges
 
     amplicon_df = pd.DataFrame(columns=primers.columns.tolist())
     for i, row in primers.iterrows():
@@ -118,10 +193,12 @@ for g in tb_drug_resistance_genes:
     amplicon_positions = []
     amplicon_names = []
 
+
     for i, row in amplicon_df.iterrows():
         amplicon_positions.append((row['pLeft_coord'], row['pRight_coord']))
         amplicon_names.append(amplicon_df['pLeft_ID'])
 
+# getting reference amplicon ranges
 
     susana_amplicon_df = pd.DataFrame(columns=susana_design.columns.tolist())
     for i, row in susana_design.iterrows():
@@ -141,6 +218,20 @@ for g in tb_drug_resistance_genes:
         susana_amplicon_positions.append((row['Start'], row['End']))
         susana_amplicon_names.append(row['primer name'])
 
+# getting designed amplicon ranges
+
+    ideal_amplicons = []
+    for row in ideal_ranges:
+        in_range = False
+        start1 = row[0]
+        end1 = row[1]
+        start2 = df['Genomic_Position'].min()
+        end2 = df['Genomic_Position'].max()
+        if (start1 <= end2) and (end1 >= start2):
+            in_range = True    
+            # print(row.to_frame())
+            ideal_amplicons.append(row)
+
     #getting horizontal bars
 
     # Create the figure and axis
@@ -157,8 +248,10 @@ for g in tb_drug_resistance_genes:
     # ax1.set_xlim([2153898, 2156121])
     # print(min(df['Genomic_Position'])-10, max(df['Genomic_Position'])+10)
     # Set y-axis limits
-    ax1.set_ylim([-len(amplicon_positions+susana_amplicon_positions)-10, 100])
+    # ax1.set_ylim([-len(amplicon_positions+susana_amplicon_positions)-10, None])
+    ax1.set_ylim(ymin=-len(amplicon_positions+susana_amplicon_positions+ideal_amplicons)-8, ymax=None)
 
+    # ax1.set_yscale('log')
     # ax1.set_xticks(df['Genomic_Position'])
     # ax1.set_xticklabels(df['Genomic_Position'])
     ax1.set_xticks(ax1.get_xticks()[::2])  # Only keep every 2nd tick
@@ -166,22 +259,33 @@ for g in tb_drug_resistance_genes:
     ax1.tick_params(axis='y', labelsize=26)
 
     ax1.set_xlabel('Genomic Positions(bps)',fontsize=30)
-    ax1.set_ylabel('SNP Frequency',fontsize=30)
+    ax1.set_ylabel('log(SNP Frequency)',fontsize=30)
 
     # Add a horizontal line at y=0
     ax1.axhline(0, color='black', linewidth=5, alpha=0.8)
 
     # Add ticks at y=0 for each bar
-    for x in df['Genomic_Position']:
-        ax1.plot([x, x], [0.3, -0.3], color='black')
+    # for x in df['Genomic_Position']:
+    #     ax1.plot([x, x], [0.3, -0.3], color='black')
 
     # # Rotate x-axis tick labels by 90 degrees
-    for label in ax1.get_xticklabels():
-        label.set_rotation(30)
+    # for label in ax1.get_xticklabels():
+    #     label.set_rotation(30)
 
     # Set title
     ax1.set_title(f'{gene} - Amplicon Coverage {read_size}bps', fontsize=40)
-
+    
+    for i, ((start, end), primer_name) in enumerate(zip(genes_positions, genes_names)):
+        ax1.barh(i+0.7, end-start, left=start, color='grey', alpha=0.3, label='Gene ranges' if i == 0 else "")
+        # ax1.axhline(0, color='black', linewidth=5, alpha=0.8)
+        if min(df['Genomic_Position'])-10 >= (start + end)/2:
+            ax1.text(min(df['Genomic_Position'])+100, i+0.7, primer_name, va='bottom', ha='center', color='black', fontsize=25)
+        elif (start + end)/2 >= max(df['Genomic_Position'])+10:
+            ax1.text(max(df['Genomic_Position'])-100, i+0.7, primer_name, va='bottom', ha='center', color='black', fontsize=25)
+        else:
+            ax1.text((start + end)/2, i+0.7, primer_name, va='bottom', ha='center', color='black', fontsize=25)
+    
+    d = i
     for i, ((start, end), primer_name) in enumerate(zip(amplicon_positions, amplicon_names)):
         ax1.barh(-i-2, end-start, left=start, color='r', alpha=0.6, label='Designer Amplicons' if i == 0 else "")
         # ax1.axhline(0, color='black', linewidth=5, alpha=0.8)
@@ -189,16 +293,16 @@ for g in tb_drug_resistance_genes:
     d = i
     for i, ((start, end), primer_name) in enumerate(zip(susana_amplicon_positions, susana_amplicon_names)):
         ax1.barh(-i-2-3-d, end-start, left=start, color='g', alpha=0.6, label='Reference Amplicons' if i == 0 else "")
+    
+    e = i
+    for i, (start, end) in enumerate(ideal_amplicons):
+        ax1.barh(-i-2-6-d-e, end-start, left=start, color='b', alpha=0.6, label='Ideal Amplicons' if i == 0 else "")
 
-    ax1.legend(fontsize=20, loc='upper right')
+    ax1.legend(fontsize=20, loc='lower left')
 
     output_path = '.'
     op = f'{output_path}/amplicon_coverage/'
     os.makedirs(op, exist_ok=True) #output path
     plt.savefig(f'{op}/{read_size}bps amplicon_coverage-{gene}.png', bbox_inches='tight')
     plt.show()
-
-
-
-
 # %%

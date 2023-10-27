@@ -4,6 +4,8 @@
 from functools import partial
 from random import choices, randint, randrange, random, sample
 from typing import List, Optional, Callable, Tuple
+from importlib import reload
+
 import numpy as np
 # from geneticalgorithm import geneticalgorithm as ga
 import pandas as pd
@@ -19,7 +21,8 @@ from Bio.SeqUtils import MeltingTemp
 from primer3 import calc_heterodimer
 from primer3 import bindings
 from Bio import SeqIO
-
+import Thermo
+reload(Thermo)
 # %%
 ref_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
 def calculate_gc_content(sequence):
@@ -128,31 +131,57 @@ def simplified_tm(seq):
     # Simplified melting temperature calculation based on base pair count
     return (seq.count('A') + seq.count('T')) * 2 + (seq.count('C') + seq.count('G')) * 4
 
-def simplified_dg(seq):
-    # Simplified Gibbs free energy calculation based on the nearest-neighbor model (not accurate)
-    nn_params = {
-        'AA': -1.0, 'TT': -1.0,
-        'AT': -0.9, 'TA': -0.9,
-        'CA': -1.7, 'TG': -1.7,
-        'GT': -1.5, 'AC': -1.5,
-        'CT': -1.6, 'AG': -1.6,
-        'GA': -1.5, 'TC': -1.5,
-        'CG': -2.8, 'GC': -2.3,
-        'GG': -1.9, 'CC': -1.9
-    }
-    dg = 0
-    for i in range(len(seq) - 1):
-        dinucleotide = seq[i:i+2]
-        dg += nn_params.get(dinucleotide, 0)
-    return dg
+# def simplified_dg(seq):
+#     # Simplified Gibbs free energy calculation based on the nearest-neighbor model (not accurate)
+#     nn_params = {
+#         'AA': -1.0, 'TT': -1.0,
+#         'AT': -0.9, 'TA': -0.9,
+#         'CA': -1.7, 'TG': -1.7,
+#         'GT': -1.5, 'AC': -1.5,
+#         'CT': -1.6, 'AG': -1.6,
+#         'GA': -1.5, 'TC': -1.5,
+#         'CG': -2.8, 'GC': -2.3,
+#         'GG': -1.9, 'CC': -1.9
+#     }
+#     dg = 0
+#     for i in range(len(seq) - 1):
+#         dinucleotide = seq[i:i+2]
+#         dg += nn_params.get(dinucleotide, 0)
+#     return dg
 
 def calculate_similarity(seq1, seq2):
     matches = sum(1 for a, b in zip(seq1, seq2) if a == b)
     return matches / len(seq1) * 100
 
-def check_last_n_base_pairs(seq1, seq2, n):
+# def check_last_n_base_pairs(seq1, seq2, n):
+#     """
+#     Check if the last n base pairs of two sequences are the same.
+
+#     Parameters:
+#     - seq1: The first sequence (string)
+#     - seq2: The second sequence (string)
+#     - n: The number of base pairs to compare from the end (integer)
+
+#     Returns:
+#     - bool: True if the last n base pairs are the same, otherwise False
+#     """
+    
+#     # Check if either sequence is shorter than n
+#     if len(seq1) < n or len(seq2) < n:
+#         return False
+    
+#     # Get the last n base pairs from each sequence
+#     last_n_seq1 = seq1[-n:]
+#     last_n_seq2 = seq2[-n:]
+    
+#     # Compare the last n base pairs
+#     return last_n_seq1 == last_n_seq2
+
+# Re-running the code after the execution state reset
+
+def check_last_n_base_pairs(seq1, seq2, n=5, t=2):
     """
-    Check if the last n base pairs of two sequences are the same.
+    Count the number of mismatches in the last n base pairs of two sequences.
 
     Parameters:
     - seq1: The first sequence (string)
@@ -160,19 +189,33 @@ def check_last_n_base_pairs(seq1, seq2, n):
     - n: The number of base pairs to compare from the end (integer)
 
     Returns:
-    - bool: True if the last n base pairs are the same, otherwise False
+    - int: The number of mismatches in the last n base pairs
     """
+    
+    # Initialize mismatch count
+    mismatch_count = 0
     
     # Check if either sequence is shorter than n
     if len(seq1) < n or len(seq2) < n:
-        return False
+        return "One or both sequences are shorter than n."
     
     # Get the last n base pairs from each sequence
     last_n_seq1 = seq1[-n:]
     last_n_seq2 = seq2[-n:]
     
-    # Compare the last n base pairs
-    return last_n_seq1 == last_n_seq2
+    # Count mismatches in the last n base pairs
+    for base1, base2 in zip(last_n_seq1, last_n_seq2):
+        if base1 != base2:
+            mismatch_count += 1
+            
+    return mismatch_count<2 # returns true if mismatch is less than 2 -> alternative binding - polymerases can go on
+
+# # Test the function
+# seq1 = "ATCGATCG"
+# seq2 = "ATCGATCA"
+# n = 5
+
+# count_mismatches_in_last_n_base_pairs(seq1, seq2, n)
 
 # Example usage
 # result = check_last_n_base_pairs("ATCGGA", "TTTGGA", 2)
@@ -183,36 +226,47 @@ def check_last_n_base_pairs(seq1, seq2, n):
 
 #%%
 def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm=50, max_dg=-10):
+    class TmVar:
+        DivalentSaltConc = 2
+        MonovalentSaltConc = 10
+        dNTPConc = 0.2 
+        OligoConc = 0.5
+    # TmVar = {
+    #     'DivalentSaltConc': 2,
+    #     'MonovalentSaltConc': 10,
+    #     'dNTPConc': 0.2,
+    #     'OligoConc': 0.5
+    # }        
     seq_len = len(sequence)
     genome_len = len(genome)
     count = 0
-    flocations = []
-    rlocations = []
-    n = 4
+    # flocations = []
+    # rlocations = []
+    n = 5
+    t = 2
     for i in range(genome_len - seq_len + 1):
         within_tm_threshold, within_dg_threshold = False, False
         subseq = genome[i:i + seq_len]
         reverse_comp_subseq = reverse_complement_sequence(subseq)
         if calculate_similarity(subseq, sequence)>similarity_threshold:
-            if check_last_n_base_pairs(subseq, sequence, n):
-                flocations.append(i)
+            if check_last_n_base_pairs(subseq, sequence, n, t):
+                # flocations.append(i)
                 # print('>>>Calculated_similarity')
                 within_tm_threshold, within_dg_threshold = False, False
-                tm = simplified_tm(subseq)
-                dg = simplified_dg(subseq)
+                (dg, tm) = Thermo.simplified_tm(subseq, complement_sequence(subseq), TmVar)
+
                 
                 within_tm_threshold = tm >= min_tm
-                within_dg_threshold = dg <= max_dg
+                within_dg_threshold = dg['Gibbs'] <= max_dg
         elif calculate_similarity(reverse_comp_subseq, sequence)>similarity_threshold:
-            if check_last_n_base_pairs(reverse_comp_subseq, sequence, n):
-                rlocations.append(i)
+            if check_last_n_base_pairs(reverse_comp_subseq, sequence, n, t):
+                # rlocations.append(i)
                 # print('>>>Calculated_similarity')
                 within_tm_threshold, within_dg_threshold = False, False
-                tm = simplified_tm(reverse_comp_subseq)
-                dg = simplified_dg(reverse_comp_subseq)
-                
+                (dg, tm) = Thermo.simplified_tm(reverse_comp_subseq, complement_sequence(reverse_comp_subseq), TmVar)
+
                 within_tm_threshold = tm >= min_tm
-                within_dg_threshold = dg <= max_dg
+                within_dg_threshold = dg['Gibbs'] <= max_dg
             
         if within_tm_threshold & within_dg_threshold:
             # print(genome[i:i + seq_len])
@@ -227,7 +281,6 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
     # print(flocations)
     # print(rlocations)
     return False  # Return False if only one or no binding sites are found
-
 # # Usage:
 # primer = 'CGAACTCGAGGCTGCCTACT'
 # # primer = 'GCTCGTCCATGTCCCACCAT'
@@ -329,7 +382,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
         pLeft_length.append(primer_num['COORDS'][1])
         pLeft_Tm.append(primer_num['TM'])
         pLeft_GC.append(primer_num['GC_PERCENT'])
-        pLeft_Sequences.append(complement_sequence(primer_num['SEQUENCE']))
+        pLeft_Sequences.append(primer_num['SEQUENCE'])
         pLeft_EndStability.append(primer_num['END_STABILITY'])
         
     for i, primer_num in enumerate(results['PRIMER_RIGHT']):
@@ -339,7 +392,8 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
         pRight_length.append(primer_num['COORDS'][1])
         pRight_Tm.append(primer_num['TM'])
         pRight_GC.append(primer_num['GC_PERCENT'])
-        pRight_Sequences.append(reverse_complement_sequence(primer_num['SEQUENCE']))
+        # pRight_Sequences.append(reverse_complement_sequence(primer_num['SEQUENCE']))
+        pRight_Sequences.append(primer_num['SEQUENCE'])
         pRight_EndStability.append(primer_num['END_STABILITY'])
 
     df = pd.DataFrame({'pLeft_ID':pLeft_ID, 'pLeft_coord':pLeft_coord, 'pLeft_length':pLeft_length, 'pLeft_Tm':pLeft_Tm, 'pLeft_GC':pLeft_GC, 'pLeft_Sequences':pLeft_Sequences, 'pLeft_EndStability':pLeft_EndStability, 

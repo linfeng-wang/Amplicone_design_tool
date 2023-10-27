@@ -1,5 +1,4 @@
 #here I would try to gather al paddings together and make new genome
-
 # the versions to fall back on
 #%%
 from functools import partial
@@ -120,8 +119,8 @@ def find_sequence_location(query_seq, fasta_file=ref_genome):
         print('!!!Primer not found in the reference genome')
         return 0
 
-pLeft_coord = []
-pLeft_coord.append(find_sequence_location('CATCGCACGTCGTCTTTCCG', ref_genome)[0])
+# pLeft_coord = []
+# pLeft_coord.append(find_sequence_location('CATCGCACGTCGTCTTTCCG', ref_genome)[0])
 
 # find_sequence_location('CATCGCACGTCGTCTTTCCG')[0]
 # find_sequence_location(complement_sequence('CATCGCACGTCGTCTTTCCG'))
@@ -181,15 +180,14 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=81, min_tm
 # result = has_multiple_binding_sites(primer, genome, 81)
 # print(result)  # Output: True or False
 
-
 # %%
-def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome):
+def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size):
     # print([len(sequence)-50,len(sequence)+50])
     # print(len(sequence))
     # size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
     size_range = f'{len(sequence)-padding*2}-{len(sequence)}'
     genome = extract_sequence_from_fasta(0, genome_size(ref_genome),0)
-    no_primer = []
+    no_primer = '-'
     # size_range = f'{len(sequence)-350}-{len(sequence)-250}'
     # print('size_range:',size_range)
     # print('SEQUENCE_INCLUDED_REGION:', [padding-10,len(sequence)-padding+10],)
@@ -204,7 +202,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 # 'SEQUENCE_EXCLUDED_REGION':[(padding,len(sequence)-padding)]
             },
             global_args={
-                'PRIMER_NUM_RETURN': 30,
+                'PRIMER_NUM_RETURN': 15,
                 'PRIMER_OPT_SIZE': 20,
                 'PRIMER_PICK_INTERNAL_OLIGO': 0,
                 'PRIMER_INTERNAL_MAX_SELF_END': 8,
@@ -261,9 +259,8 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
         pLeft_ID.append(f'P{seq}-L{i}')
         # pLeft_coord.append(primer_num['COORDS'][0]+low_b)
         # print(primer_num['SEQUENCE'])
-        # print('===')
         pLeft_coord.append(find_sequence_location(primer_num['SEQUENCE'], ref_genome)[0])
-
+        
         pLeft_length.append(primer_num['COORDS'][1])
         pLeft_Tm.append(primer_num['TM'])
         pLeft_GC.append(primer_num['GC_PERCENT'])
@@ -291,21 +288,75 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
     if len(primer_pool) == 0:
         print(f'{df.shape[0]} primers designed')
         for i, row in df.iterrows():
+            # print(i, df.shape[0]-1)
             left_ok = True
             right_ok = True
-            left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
-            right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
+            too_far = False
+            #runs first to avoid meaningless running of has_multiple_binding_sites which take a long time
+            if abs(low_b - row['pLeft_coord']) > read_size/2:
+                left_ok = False
+                too_far = True
+            if abs(high_b - row['pRight_coord']) > read_size/2:
+                right_ok = False
+                too_far = True
+            if (not left_ok or not right_ok) and i != df.shape[0]-1:
+                print(f'Primer pair #{i} has alternative binding site')
+                continue
+            else:
+                pass
+                # print(f'Primer pair #{i} has alternative binding site')
+                
+            if too_far == False:
+                left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
+                right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
+                if (not left_ok or not right_ok) and i != df.shape[0]-1:
+                    print(f'Primer pair #{i} has alternative binding site')
+                    continue  
+                else:
+                    pass
+                    # print(f'Primer pair #{i} has alternative binding site')
+            else:
+                pass
+            
+            # print(too_far, left_ok, right_ok)
+
+            #if pass all filtering
             if left_ok == True and right_ok == True:
                 primer_pool.append(complement_sequence(row['pLeft_Sequences']))
                 primer_pool.append(row['pRight_Sequences'])
                 row_df = pd.DataFrame(row).T
                 accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair {i} accepted')
+                print(f'Primer pair #{i} accepted')
+                print(low_b, row['pLeft_coord'])
+                print(abs(low_b - row['pLeft_coord']) > read_size/2)
+                no_primer = '-'
                 print('***')
                 break
             else:
-                print(f'Primer pair {i} has alternative binding site')
-                continue
+                if i == df.shape[0]-1:
+                    print(f'!!!No suitable primer found:, please manually inspect the sequence')
+                    if abs(low_b - row['pLeft_coord']) > read_size/2:
+                        left_ok = False
+                        print('!Problem with left(forward) primer')
+                        print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                        change = input('Where to move (+/-bps):')
+                        low_b = low_b+int(change)
+                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} = {low_b-int(change), high_b}')
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                    elif abs(high_b - row['pRight_coord']) > read_size/2:
+                        right_ok = False
+                        print('!Problem with Right(backward) primer')
+                        print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                        change = input('Where to move (+/-bps):')
+                        high_b = high_b+int(change)
+                        seq_template = extract_sequence_from_fasta(low_b, high_b+int(change), padding=0)
+                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                    no_primer='Redesigned'
+                else:
+                    print(f'Primer pair #{i} has alternative binding site')
+                    continue
         # print(primer_pool, accepted_primers)
         # print(accepted_primers)
         # print(df.iloc[0])
@@ -317,23 +368,52 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             # print(row)
             left_ok = True
             right_ok = True
-            for x in primer_pool: # heterodimer check
-                if check_heterodimer(x, complement_sequence(row['pLeft_Sequences'])) == False:
-                    left_ok = False 
-                if check_heterodimer(x, row['pRight_Sequences']) == False:
-                    right_ok = False
-            #Alternative binding check
-            if left_ok != True or right_ok != True:
-                if i == df.shape[0]:
-                    print('!!!No suitable primer found: perhaps too many amplicones')
-                else:
-                    print(f'Primer pair {i} has alternative binding site')
-                    if i == df.shape[0]:
-                        print(f'!!!No suitable primer found:form covered_range[seq], please manually inspect the sequence')
-                    no_primer.append(seq)
+            too_far = False
+            hetero = False
+            # checking if the primer is too far away from the original range
+            if abs(low_b - row['pLeft_coord']) > read_size/2:
+                left_ok = False
+                too_far = True
+            if abs(high_b - row['pRight_coord']) > read_size/2:
+                right_ok = False
+                too_far = True
+            if (not left_ok or not right_ok) and i != df.shape[0]-1:
+                print(f'Primer pair #{i} has alternative binding site')
                 continue
-            left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
-            right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
+            else:
+                pass
+                # print(f'Primer pair #{i} has alternative binding site')
+
+            if too_far == False:
+                for x in primer_pool: # heterodimer check
+                    if check_heterodimer(x, complement_sequence(row['pLeft_Sequences'])) == False:
+                        left_ok = False
+                        hetero = True
+                    if check_heterodimer(x, row['pRight_Sequences']) == False:
+                        right_ok = False
+                        hetero = True
+
+                if (not left_ok or not right_ok) and i != df.shape[0]-1:
+                    print(f'Primer pair #{i} has homodimer')
+                    continue  
+                else:
+                    pass
+                    # print(f'Primer pair #{i} has alternative binding site')
+            else:
+                pass
+            
+            if too_far or hetero:
+                pass
+            else:  
+                left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
+                right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
+                if (not left_ok or not right_ok) and i != df.shape[0]-1:
+                    print(f'Primer pair #{i} has alternative binding site')
+                    continue
+                else:
+                    pass
+                    # print(f'Primer pair #{i} has alternative binding site')
+            # print(too_far, hetero, left_ok, right_ok)
             if left_ok == True and right_ok == True:
                 row_df = pd.DataFrame(row).T
                 # primer_pool.extend(row[['pLeft_Sequences','pRight_Sequences']].values.tolist())
@@ -341,18 +421,42 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 primer_pool.append(row['pRight_Sequences'])
                 # print(row)
                 accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair {i} accepted')
+                print(f'Primer pair #{i} accepted')
+                # print(low_b, row['pLeft_coord'])
+                # print(abs(low_b - row['pLeft_coord']) > read_size/2)
+                no_primer='-'
                 print('***')
                 break
             else:
-                if i == df.shape[0]:
-                    print(f'!!!No suitable primer found:form covered_range[seq], please manually inspect the sequence')
-                    no_primer.append(seq)
-                    continue
+                # print(i, df.shape[0]-1)
+                if i == df.shape[0]-1:
+                    print(f'!!!No suitable primer found: please manually inspect the sequence')
+                    # no_primer.append(seq)
+                    if abs(low_b - row['pLeft_coord']) > read_size/2:
+                        left_ok = False
+                        print('!Problem with left(forward) primer')
+                        print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                        change = input('Where to move (+/-bps):')
+                        low_b = low_b+int(change)
+                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b-int(change), high_b}')
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+
+                    if abs(high_b - row['pRight_coord']) > read_size/2:
+                        right_ok = False
+                        print('!Problem with Right(backward) primer')
+                        print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp stream)')
+                        change = input('Where to move (+/-bps):')
+                        high_b = high_b+int(change)
+                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                    no_primer='Redesigned'
                 else:
-                    print(f'Primer pair {i} has alternative binding site')
-                continue
-    return primer_pool, accepted_primersm, no_primer
+                    print(f'Primer pair #{i} has alternative binding site')
+                    continue
+            #Alternative binding check
+    return primer_pool, accepted_primers, no_primer
 
 #%%
 # primer_pool = []
