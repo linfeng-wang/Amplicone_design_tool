@@ -259,7 +259,7 @@ for g in tb_drug_resistance_genes:
     ax1.tick_params(axis='y', labelsize=26)
 
     ax1.set_xlabel('Genomic Positions(bps)',fontsize=30)
-    ax1.set_ylabel('log(SNP Frequency)',fontsize=30)
+    ax1.set_ylabel('log10(SNP Frequency)',fontsize=30)
 
     # Add a horizontal line at y=0
     ax1.axhline(0, color='black', linewidth=5, alpha=0.8)

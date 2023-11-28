@@ -289,15 +289,12 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
 # print(result)  # Output: True or False
 
 # Check for material binding sites
-def check_for_snp(seq, priority, plength, forward, cut_off=50000):
-    full_gene = priority.groupby(['genome_pos', 'gene', 'change']).agg({'freq': 'sum'}).reset_index() # this is to group by the same position and sum up the freq
-
+def check_for_snp(seq, priority, plength, forward, cut_off=1.3):
     if forward == True:
-        ploc = find_sequence_location(seq)[0]
+        ploc = find_sequence_location(seq)
     else:    
-        ploc = find_sequence_location(reverse_complement_sequence(seq))[0]
-    snp_freq = full_gene[(full_gene['genome_pos']>= ploc) & (full_gene['genome_pos']<=ploc+plength)]['freq']
-    # print(snp_freq.max())
+        ploc = find_sequence_location(reverse_complement_sequence(seq))
+    snp_freq = priority[priority['genome_pos']>= ploc and priority['genome_pos']<=ploc+plength]['weight']
     if snp_freq.max() > cut_off:
         return True
     else:
@@ -305,7 +302,7 @@ def check_for_snp(seq, priority, plength, forward, cut_off=50000):
     
 
 # %%
-def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size, priority, freq_cutoff=50000):
+def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size):
     # print([len(sequence)-50,len(sequence)+50])
     # print(len(sequence))
     # size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
@@ -428,9 +425,6 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             right_ok = True
             too_far = False
             #runs first to avoid meaningless running of has_multiple_binding_sites which take a long time
-            if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True, cut_off=freq_cutoff) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False, cut_off=freq_cutoff):
-                print(f'Primer pair #{i} binding position has SNP')
-                continue
             if abs(low_b - row['pLeft_coord']) > read_size/2:
                 left_ok = False
                 too_far = True
@@ -509,9 +503,6 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             too_far = False
             hetero = False
             # checking if the primer is too far away from the original range
-            if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False):
-                print(f'Primer pair #{i} binding position has SNP')
-                continue
             if abs(low_b - row['pLeft_coord']) > read_size/2:
                 left_ok = False
                 too_far = True
@@ -599,6 +590,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                     continue
             #Alternative binding check
     return primer_pool, accepted_primers, no_primer
+
 #%%
 # primer_pool = []
 # padding = 150
