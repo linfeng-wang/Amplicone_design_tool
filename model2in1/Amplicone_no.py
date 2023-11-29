@@ -48,13 +48,13 @@ def rolling_sum_search(df, weight, window_size, genomic_pos):
         rolling_sum.append(freq_sum)
     return rolling_sum
 #%%
-def place_amplicone_search(full_data, target_coverage, read_size, graphic_output=False, ref_size=4485058):
+def place_amplicone_search(full_data, target_coverage, read_size, ref_size, graphic_output=False):
     full_data_cp = full_data.copy()
     read_size = read_size
     window_size = read_size
     read_number = 0
     # priorities = []
-    graph_output = False # set to True to see the graph output
+    graph_output = graphic_output # set to True to see the graph output
     weight_window_sum = rolling_sum_search(full_data_cp, 'weight', window_size, full_data_cp['genome_pos'].tolist())
     pos = full_data_cp['genome_pos'].unique()
     covered_positions = pd.DataFrame(columns = ['sample_id','genome_pos','gene','change','freq', 'type','sublin','drtype','drugs','weight'])
@@ -134,13 +134,13 @@ def place_amplicone_search(full_data, target_coverage, read_size, graphic_output
     return gene_coverage, coverage_range
 
 #%%
-def place_amplicone_spol(full_data, target_coverage, read_size, graphic_output=False, ref_size=4485058):
+def place_amplicone_spol(full_data, target_coverage, read_size, ref_size, graphic_output=False):
     full_data_cp = full_data.copy()
     read_size = read_size
     window_size = read_size
     read_number = 0
     # priorities = []
-    graph_output = False # set to True to see the graph output
+    graph_output = graphic_output # set to True to see the graph output
     weight_window_sum = rolling_sum_search(full_data_cp, 'weight', window_size, full_data_cp['genome_pos'].tolist())    
     pos = full_data_cp['genome_pos'].unique()
     covered_positions = pd.DataFrame(columns = ['genome_pos','weight'])
@@ -218,47 +218,47 @@ def place_amplicone_spol(full_data, target_coverage, read_size, graphic_output=F
     
 
 #%% for testing
-def spol():
-    spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
-    spacers = np.array(spacers)
-    spacers = spacers[:, 1:3]
-    spacers = spacers.tolist()
-    flattened_data = [item for sublist in spacers for item in sublist]
-    spacer_max = max(flattened_data)
-    spacer_min = min(flattened_data)
+# def spol():
+#     spacers = pd.read_csv('spacers.bed', sep='\t', header=None)
+#     spacers = np.array(spacers)
+#     spacers = spacers[:, 1:3]
+#     spacers = spacers.tolist()
+#     flattened_data = [item for sublist in spacers for item in sublist]
+#     spacer_max = max(flattened_data)
+#     spacer_min = min(flattened_data)
     
-    spol_list = np.arange(spacer_min-200,spacer_max+200,1)
-    weight = [0.01]*len(spol_list) 
-    spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
-    # Create a list of boolean masks, one for each range
-    masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
+#     spol_list = np.arange(spacer_min-200,spacer_max+200,1)
+#     weight = [0.01]*len(spol_list) 
+#     spol_data = pd.DataFrame({'genome_pos':spol_list,'weight':weight})
+#     # Create a list of boolean masks, one for each range
+#     masks = [(spol_data['genome_pos'] >= start) & (spol_data['genome_pos'] <= end) for start, end in spacers]
 
-    # Use reduce and the | operator to combine the masks into a single mask
-    combined_mask = reduce(lambda x, y: x | y, masks)
+#     # Use reduce and the | operator to combine the masks into a single mask
+#     combined_mask = reduce(lambda x, y: x | y, masks)
 
-    # Use .loc and the combined mask to update the weight column
-    spol_data.loc[combined_mask, 'weight'] = 1
+#     # Use .loc and the combined mask to update the weight column
+#     spol_data.loc[combined_mask, 'weight'] = 1
 
-    read_size = 1000
-    covered_ranges = place_amplicone_spol(spol_data, 1, read_size, graphic_output=False, ref_size = genome_size(ref_genome))
-    print(covered_ranges)
+#     read_size = 1000
+#     covered_ranges = place_amplicone_spol(spol_data, 1, read_size, graphic_output=False, ref_size = genome_size(ref_genome))
+#     print(covered_ranges)
     
-def amplicone_no():
-    full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
-    full_data = full_data[~full_data['drugs'].isna()]
-    full_data = full_data.sort_values(by=['genome_pos'])
-    full_data = full_data.reset_index(drop=True)
-    full_data['weight'] = full_data['freq']
-    ref_genome = '/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/MTB-h37rv_asm19595v2-eg18.fa'
-    target_coverage = 0.9
-    read_size = 1000
-    gene_coverage = place_amplicone_search(full_data, target_coverage, read_size, genome_size(ref_genome))
-    print(gene_coverage)
+# def amplicone_no():
+#     full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
+#     full_data = full_data[~full_data['drugs'].isna()]
+#     full_data = full_data.sort_values(by=['genome_pos'])
+#     full_data = full_data.reset_index(drop=True)
+#     full_data['weight'] = full_data['freq']
+#     ref_genome = '/mnt/storage10/lwang/Projects/Amplicone_design_tool/model/MTB-h37rv_asm19595v2-eg18.fa'
+#     target_coverage = 0.9
+#     read_size = 1000
+#     gene_coverage = place_amplicone_search(full_data, target_coverage, read_size, genome_size(ref_genome))
+#     print(gene_coverage)
 
 #%%
-if __name__ == "__main__":
-    amplicone_no()
-    spol()
+# if __name__ == "__main__":
+#     amplicone_no()
+#     spol()
 
 # # # %%
 # # full_data = pd.read_csv('/mnt/storage10/jody/projects/variant_dump/variants.csv')
