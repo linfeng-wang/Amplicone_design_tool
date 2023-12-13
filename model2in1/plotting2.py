@@ -15,8 +15,8 @@ import json
 from imp import reload
 import primer_selection
 reload(primer_selection)
-import Amplicone_no
-reload(Amplicone_no)
+import Amplicon_no
+reload(Amplicon_no)
 import argparse
 from functools import reduce
 import os
@@ -60,7 +60,7 @@ tb_drug_resistance_genes = {
 
 full_data.loc[full_data['gene'].isin(tb_drug_resistance_genes.keys()), 'weight'] += 0.5
 
-susana_design = pd.read_excel('/mnt/storage10/lwang/Projects/Amplicone_design_tool/model2in1/amplicon_TB_2023_V2.xlsx', header = 0)
+susana_design = pd.read_excel('/mnt/storage10/lwang/Projects/Amplicon_design_tool/model2in1/amplicon_TB_2023_V2.xlsx', header = 0)
 susana_design = susana_design.iloc[:-3]
 # susana_design = susana_design['primer name'].contains('')
 
@@ -172,7 +172,7 @@ for g in tb_drug_resistance_genes:
             genes_df = pd.concat([genes_df, row.to_frame().T],axis = 0)
     genes_positions = []
     genes_names = []
-    print(genes_positions)
+    # print(genes_positions)
     for i, row in genes_df.iterrows():
         genes_positions.append((row['start'], row['end']))
         genes_names.append(row['gene'])
@@ -192,12 +192,14 @@ for g in tb_drug_resistance_genes:
             amplicon_df = pd.concat([amplicon_df, row.to_frame().T],axis = 0)
     amplicon_positions = []
     amplicon_names = []
-
-
     for i, row in amplicon_df.iterrows():
         amplicon_positions.append((row['pLeft_coord'], row['pRight_coord']))
-        amplicon_names.append(amplicon_df['pLeft_ID'])
-
+        amplicon_names.append(row['pLeft_ID'])
+        # amplicon_names.append(amplicon_df['pLeft_ID'])
+        
+    print(g)
+    print(amplicon_names)
+    print(amplicon_positions)
 # getting reference amplicon ranges
 
     susana_amplicon_df = pd.DataFrame(columns=susana_design.columns.tolist())

@@ -100,7 +100,7 @@ tb_drug_resistance_genes = {
 
 full_data.loc[full_data['gene'].isin(tb_drug_resistance_genes.keys()), 'weight'] += 0.5
 full_data.to_csv('snp_priority.csv', index=False)
-
+#%%
 def rolling_sum(df, weight, window_size, genomic_pos):
     """
     Calculates the rolling sum of a list with a given window size.
@@ -115,8 +115,8 @@ def rolling_sum(df, weight, window_size, genomic_pos):
     # Calculate the rolling sum using a list comprehension
     rolling_sum = []
     pos = np.unique(genomic_pos).tolist()
-    # print(pos)
-    for x in pos:
+    print(len(pos))
+    for x in tqdm(pos):
         start = x
         in_range = [i for i in pos if i <= start+window_size]
         end = min(in_range, key=lambda x:abs(x-(start+window_size)))

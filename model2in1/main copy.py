@@ -26,6 +26,7 @@ from functools import reduce
 import os
 import matplotlib.pyplot as plt
 import pandas as pd
+import plotting1 as p
 
 def main(args):
     # Rationale:
@@ -258,7 +259,7 @@ def main_plotting(args):
     gff = args.gff
     reference_design = args.reference_design
     output_dir = args.output_dir
-    plotting(priority, accepted_primers, gff, reference_design, output_dir)
+    p.plotting(priority, accepted_primers, gff, reference_design, output_dir)
     return 0
     
 # %%

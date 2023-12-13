@@ -15,8 +15,8 @@ import json
 from imp import reload
 import primer_selection
 reload(primer_selection)
-import Amplicone_no
-reload(Amplicone_no)
+import Amplicon_no
+reload(Amplicon_no)
 import argparse
 from functools import reduce
 import os
@@ -26,7 +26,7 @@ import pandas as pd
 
 #%%
 # Sample data
-def plotting(priority, accepted_primers, gff, reference_design, output_dir):
+def plotting(priority, read_size, accepted_primers, gff, reference_design, output_dir):
     full_data = pd.read_csv(priority)
     full_data = full_data.sort_values(by=['genome_pos'])
     full_data = full_data.reset_index(drop=True)
@@ -60,8 +60,8 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
     }
 
     full_data.loc[full_data['gene'].isin(tb_drug_resistance_genes.keys()), 'weight'] += 0.5
-    
-    reference_design = pd.read_csv(reference_design, header = 0)
+    if reference_design is not None:
+        reference_design = pd.read_csv(reference_design, header = 0)
     # reference_design = reference_design.iloc[:-3]
     # reference_design = reference_design['primer name'].contains('')
 
@@ -116,10 +116,13 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
     genes['Name'] = genes[8].str.extract(r'Name=([^;]*)')
     genes = genes[[3,4,'Name']]
     genes.columns = ['start', 'end', 'gene']
-
+    # print(genes)
     #%%
     gene_range = pd.read_csv('regions.bed', sep = '\t', header = 0)
-    read_size = 400
+        
+    # primers = pd.read_csv('./Amplicon_design_output/Primer_design-accepted_primers-10-1000.csv', index_col=False)
+    primers = pd.read_csv(accepted_primers, index_col=False)
+    # primers.drop(columns=['Unnamed: 0'], inplace=True)
 
     for g in tb_drug_resistance_genes:
         # print(g, '===============')
@@ -143,22 +146,25 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
 
         full_gene['freq'] = full_gene['freq'].apply(lambda x: max(x, 1))
 
-        
+        # print(full_gene)
         snp_names = full_gene['change'].tolist()
         snp_frequency = full_gene['freq'].tolist()
         genomic_positions = full_gene['genome_pos'].tolist()
-        # primers = pd.read_csv('./Amplicon_design_output/Primer_design-accepted_primers-10-1000.csv', index_col=False)
-        primers = pd.read_csv(accepted_primers, index_col=False)
-        # primers.drop(columns=['Unnamed: 0'], inplace=True)
+
 
         df = pd.DataFrame({
             'Gene': snp_names,
             'SNP_Frequency': np.log10(snp_frequency),
             'Genomic_Position': genomic_positions
         })
+
         if len(df) == 0:
-            print('---> No SNPs found in this gene')
+            print(f'---> No SNPs found in: {gene}')
             continue
+        else:
+            # print(f'---> SNPs found in: {gene}')
+            pass
+            
     # getting gene ranges   
         genes_df = pd.DataFrame(columns=genes.columns.tolist())
         for i, row in genes.iterrows():
@@ -173,7 +179,7 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
                 genes_df = pd.concat([genes_df, row.to_frame().T],axis = 0)
         genes_positions = []
         genes_names = []
-        print(genes_positions)
+        # print(genes_positions)
         for i, row in genes_df.iterrows():
             genes_positions.append((row['start'], row['end']))
             genes_names.append(row['gene'])
@@ -193,13 +199,13 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
                 amplicon_df = pd.concat([amplicon_df, row.to_frame().T],axis = 0)
         amplicon_positions = []
         amplicon_names = []
-
+        
         for i, row in amplicon_df.iterrows():
             amplicon_positions.append((row['pLeft_coord'], row['pRight_coord']))
-            amplicon_names.append(amplicon_df['pLeft_ID'])
-
+            amplicon_names.append(row['pLeft_ID'])
+        
     # getting reference amplicon ranges
-        if reference_design != None:
+        if reference_design is not None:
             reference_amplicon_df = pd.DataFrame(columns=reference_design.columns.tolist())
             for i, row in reference_design.iterrows():
                 in_range = False
@@ -216,7 +222,7 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
 
             for i, row in reference_amplicon_df.iterrows():
                 reference_amplicon_positions.append((row['Start'], row['End']))
-                # reference_amplicon_names.append(row['primer name'])
+                reference_amplicon_names.append(row['primer name'])
 
     # getting designed amplicon ranges
 
@@ -235,7 +241,7 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
         #getting horizontal bars
 
         # Create the figure and axis
-        fig, ax1 = plt.subplots(figsize=(20, 16), frameon=False, dpi=50)
+        fig, ax1 = plt.subplots(figsize=(20, 16), frameon=True, dpi=50)
 
         # Create the bar chart
         bars = ax1.bar(df['Genomic_Position'], df['SNP_Frequency'], color='b', alpha=0.6)
@@ -248,9 +254,10 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
         # ax1.set_xlim([2153898, 2156121])
         # print(min(df['Genomic_Position'])-10, max(df['Genomic_Position'])+10)
         # Set y-axis limits
-        if reference_design != None:
-            ax1.set_ylim([-len(amplicon_positions+reference_amplicon_positions)-10, None])
-            ax1.set_ylim(ymin=-len(amplicon_positions+reference_amplicon_positions+ideal_amplicons)-8, ymax=None)
+        if reference_design is not None:
+            # ax1.set_ylim([-len(amplicon_positions+reference_amplicon_positions)-10, None])
+            ax1.set_ylim(ymin=-len(amplicon_positions+reference_amplicon_positions)-5, ymax=len(genes_names)+3)
+            # ax1.set_ylim(ymin=-len(amplicon_positions+reference_amplicon_positions+ideal_amplicons)-8, ymax=None)
 
 
         ax1.set_xticks(ax1.get_xticks()[::2])  # Only keep every 2nd tick
@@ -276,22 +283,27 @@ def plotting(priority, accepted_primers, gff, reference_design, output_dir):
             else:
                 ax1.text((start + end)/2, i+0.7, primer_name, va='bottom', ha='center', color='black', fontsize=25)
         d = i
+
         for i, ((start, end), primer_name) in enumerate(zip(amplicon_positions, amplicon_names)):
-            ax1.barh(-i-2, end-start, left=start, color='r', alpha=0.6, label='Designer Amplicons' if i == 0 else "")
-            ax1.axhline(0, color='black', linewidth=5, alpha=0.8)
-            ax1.text((start + end)/2, -5, primer_name, va='bottom', ha='center', color='black')
-        if reference_design != None:
+            ax1.barh(-i-2, end-start, left=start, color='r', alpha=0.4, label='Designer Amplicons' if i == 0 else "")
+            # ax1.axhline(0, color='black', linewidth=5, alpha=0.8)
+            primer_name = primer_name.split('-')
+            primer_name = primer_name[:-1]
+            primer_name = '-'.join(primer_name)
+            ax1.text((start + end)/2, -i-2.2, primer_name, va='bottom', ha='center', color='black', fontsize=25)
+        if reference_design is not None:
             d = i
             for i, ((start, end), primer_name) in enumerate(zip(reference_amplicon_positions, reference_amplicon_names)):
                 ax1.barh(-i-2-3-d, end-start, left=start, color='g', alpha=0.6, label='Reference Amplicons' if i == 0 else "")
-
+        # print(reference_amplicon_positions)
         # e = i
         # for i, (start, end) in enumerate(ideal_amplicons):
         #     ax1.barh(-i-2-6-d-e, end-start, left=start, color='b', alpha=0.6, label='Ideal Amplicons' if i == 0 else "")
         ax1.legend(fontsize=20, loc='lower left')
 
-        output_path = 'output_dir'
-        op = f'{output_path}/amplicon_coverage_plots/'
+        output_path = f'{output_dir}'
+        op = f'{output_path}/Amplicon_coverage_plots/'
         os.makedirs(op, exist_ok=True) #output path
-        plt.savefig(f'{op}/{read_size}bps amplicon_coverage-{gene}.png', bbox_inches='tight')
+        fig.savefig(f'{op}/{read_size}bps-amplicon_coverage-{gene}.png', bbox_inches='tight')
+    print(f'**Graphic output saved to: {op}')
         # plt.show()

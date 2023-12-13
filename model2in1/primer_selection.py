@@ -24,7 +24,7 @@ from Bio import SeqIO
 import Thermo
 reload(Thermo)
 # %%
-ref_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
+# ref_genome= 'MTB-h37rv_asm19595v2-eg18.fa'
 def calculate_gc_content(sequence):
     """
     Calculate the percentage of G and C nucleotides in a DNA sequence.
@@ -112,7 +112,7 @@ def check_heterodimer(primer1, primer2):
 #%%
 # test = extract_sequence_from_fasta(1000, 2300)
 
-def find_sequence_location(query_seq, fasta_file=ref_genome):
+def find_sequence_location(query_seq, fasta_file):
     ref_genome = SeqIO.read(fasta_file, "fasta")
     position = ref_genome.seq.find(query_seq)
     if position != -1:
@@ -231,12 +231,7 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
         MonovalentSaltConc = 10
         dNTPConc = 0.2 
         OligoConc = 0.5
-    # TmVar = {
-    #     'DivalentSaltConc': 2,
-    #     'MonovalentSaltConc': 10,
-    #     'dNTPConc': 0.2,
-    #     'OligoConc': 0.5
-    # }        
+
     seq_len = len(sequence)
     genome_len = len(genome)
     count = 0
@@ -254,12 +249,13 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
                 # print('>>>Calculated_similarity')
                 within_tm_threshold, within_dg_threshold = False, False
                 (dg, tm) = Thermo.simplified_tm(subseq, complement_sequence(subseq), TmVar)
-
                 
                 within_tm_threshold = tm >= min_tm
                 within_dg_threshold = dg['Gibbs'] <= max_dg
         elif calculate_similarity(reverse_comp_subseq, sequence)>similarity_threshold:
             if check_last_n_base_pairs(reverse_comp_subseq, sequence, n, t):
+                # print('====C')
+                
                 # rlocations.append(i)
                 # print('>>>Calculated_similarity')
                 within_tm_threshold, within_dg_threshold = False, False
@@ -267,8 +263,9 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
 
                 within_tm_threshold = tm >= min_tm
                 within_dg_threshold = dg['Gibbs'] <= max_dg
+        if within_tm_threshold & within_dg_threshold: # the alternative binding site is within the threshold
+            # print('====D')
             
-        if within_tm_threshold & within_dg_threshold:
             # print(genome[i:i + seq_len])
             count += 1
             
@@ -277,6 +274,7 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
                 # print("#####")
                 # print(flocations)
                 # print(rlocations)
+                # print('====E')
                 return True  # Early exit if more than one binding site is found
     # print(flocations)
     # print(rlocations)
@@ -289,23 +287,26 @@ def has_multiple_binding_sites(sequence, genome, similarity_threshold=90, min_tm
 # print(result)  # Output: True or False
 
 # Check for material binding sites
-def check_for_snp(seq, priority, plength, forward, cut_off=50000):
-    full_gene = priority.groupby(['genome_pos', 'gene', 'change']).agg({'freq': 'sum'}).reset_index() # this is to group by the same position and sum up the freq
-
+def check_for_snp(seq, priority, plength, forward, ref_genome, cut_off=50000, spol = False):
+    if not spol:
+        full_gene = priority.groupby(['genome_pos', 'gene', 'change']).agg({'freq': 'sum'}).reset_index() # this is to group by the same position and sum up the freq
+    
     if forward == True:
-        ploc = find_sequence_location(seq)[0]
+        ploc = find_sequence_location(seq, ref_genome)[0]
     else:    
-        ploc = find_sequence_location(reverse_complement_sequence(seq))[0]
+        ploc = find_sequence_location(reverse_complement_sequence(seq), ref_genome)[0]
+    # print('ploc',ploc)
     snp_freq = full_gene[(full_gene['genome_pos']>= ploc) & (full_gene['genome_pos']<=ploc+plength)]['freq']
+    # print('snp_freq',snp_freq)
+    # print('full_gene',full_gene[(full_gene['genome_pos']>= ploc) & (full_gene['genome_pos']<=ploc+plength)])
     # print(snp_freq.max())
     if snp_freq.max() > cut_off:
         return True
     else:
         return False
     
-
 # %%
-def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size, priority, freq_cutoff=50000):
+def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000):
     # print([len(sequence)-50,len(sequence)+50])
     # print(len(sequence))
     # size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
@@ -428,31 +429,43 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             right_ok = True
             too_far = False
             #runs first to avoid meaningless running of has_multiple_binding_sites which take a long time
-            if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True, cut_off=freq_cutoff) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False, cut_off=freq_cutoff):
-                print(f'Primer pair #{i} binding position has SNP')
-                continue
+            if check_snp:
+                if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True, ref_genome, cut_off=freq_cutoff) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False, ref_genome, cut_off=freq_cutoff):
+                    print(f'Primer pair #{i+1} binding position has SNP')
+                    continue
             if abs(low_b - row['pLeft_coord']) > read_size/2:
+                # print('low')
+                # print(low_b, row['pLeft_coord'])
+                # print(abs(low_b - row['pLeft_coord']))
                 left_ok = False
                 too_far = True
             if abs(high_b - row['pRight_coord']) > read_size/2:
+                # print('high')
+                # print(high_b, row['pRight_coord'])
+                # print(abs(high_b - row['pRight_coord']))
                 right_ok = False
                 too_far = True
             if (not left_ok or not right_ok) and i != df.shape[0]-1:
-                print(f'Primer pair #{i} has alternative binding site')
+                # print('==1')
+                print(f'Primer pair #{i+1} has alternative binding site')
                 continue
             else:
                 pass
-                # print(f'Primer pair #{i} has alternative binding site')
+                # print(f'Primer pair #{i+1} has alternative binding site')
                 
             if too_far == False:
+                # print(has_multiple_binding_sites(row['pLeft_Sequences'], genome))
+                # print(has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome))
                 left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
                 right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
                 if (not left_ok or not right_ok) and i != df.shape[0]-1:
-                    print(f'Primer pair #{i} has alternative binding site')
+                    # print('==2')
+
+                    print(f'Primer pair #{i+1} has alternative binding site')
                     continue  
                 else:
                     pass
-                    # print(f'Primer pair #{i} has alternative binding site')
+                    # print(f'Primer pair #{i+1} has alternative binding site')
             else:
                 pass
             
@@ -464,7 +477,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 primer_pool.append(row['pRight_Sequences'])
                 row_df = pd.DataFrame(row).T
                 accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair #{i} accepted')
+                print(f'Primer pair #{i+1} accepted')
                 # print(low_b, row['pLeft_coord'])
                 # print(abs(low_b - row['pLeft_coord']) > read_size/2)
                 no_primer.append('-')
@@ -478,22 +491,31 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                         print('!Problem with left(forward) primer')
                         print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
                         change = input('Where to move (+/-bps):')
+                        if change == 'p':
+                            continue
                         low_b = low_b+int(change)
                         seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
                         print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} = {low_b-int(change), high_b}')
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
+                        
                     elif abs(high_b - row['pRight_coord']) > read_size/2:
                         right_ok = False
                         print('!Problem with Right(backward) primer')
                         print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp upstream)')
                         change = input('Where to move (+/-bps):')
+                        if change == 'p':
+                            continue
                         high_b = high_b+int(change)
                         seq_template = extract_sequence_from_fasta(low_b, high_b+int(change), padding=0)
                         print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
+                        
                     no_primer.append('Redesigned')
                 else:
-                    print(f'Primer pair #{i} has alternative binding site')
+                    print('==3')
+                    print(f'Primer pair #{i+1} has alternative binding site')
                     continue
         # print(primer_pool, accepted_primers)
         # print(accepted_primers)
@@ -509,17 +531,26 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             too_far = False
             hetero = False
             # checking if the primer is too far away from the original range
-            if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False):
-                print(f'Primer pair #{i} binding position has SNP')
-                continue
+            if check_snp:
+                if check_for_snp(row['pLeft_Sequences'], priority, row['pLeft_length'], True, ref_genome) or check_for_snp(row['pRight_Sequences'], priority, row['pRight_length'], False, ref_genome):
+                    print(f'Primer pair #{i+1} binding position has SNP')
+                    continue
             if abs(low_b - row['pLeft_coord']) > read_size/2:
+                # print('low')
+                # print(low_b, row['pLeft_coord'])
+                # print(abs(low_b - row['pLeft_coord']))
                 left_ok = False
                 too_far = True
             if abs(high_b - row['pRight_coord']) > read_size/2:
+                # print('high')
+                # print(high_b, row['pRight_coord'])
+                # print(abs(high_b - row['pRight_coord']))
                 right_ok = False
                 too_far = True
             if (not left_ok or not right_ok) and i != df.shape[0]-1:
-                print(f'Primer pair #{i} has alternative binding site')
+                # print('==4')
+                
+                print(f'Primer pair #{i+1} has alternative binding site')
                 continue
             else:
                 pass
@@ -535,11 +566,10 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                         hetero = True
 
                 if (not left_ok or not right_ok) and i != df.shape[0]-1:
-                    print(f'Primer pair #{i} has homodimer')
+                    print(f'Primer pair #{i+1} has homodimer')
                     continue  
                 else:
                     pass
-                    # print(f'Primer pair #{i} has alternative binding site')
             else:
                 pass
             
@@ -549,11 +579,11 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 left_ok = not has_multiple_binding_sites(row['pLeft_Sequences'], genome)
                 right_ok = not has_multiple_binding_sites(reverse_complement_sequence(row['pRight_Sequences']), genome)
                 if (not left_ok or not right_ok) and i != df.shape[0]-1:
-                    print(f'Primer pair #{i} has alternative binding site')
+                    # print('==5')
+                    print(f'Primer pair #{i+1} has alternative binding site')
                     continue
                 else:
                     pass
-                    # print(f'Primer pair #{i} has alternative binding site')
             # print(too_far, hetero, left_ok, right_ok)
             if left_ok == True and right_ok == True:
                 row_df = pd.DataFrame(row).T
@@ -562,12 +592,11 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 primer_pool.append(row['pRight_Sequences'])
                 # print(row)
                 accepted_primers = pd.concat([accepted_primers, row_df],axis=0)
-                print(f'Primer pair #{i} accepted')
+                print(f'Primer pair #{i+1} accepted')
                 # print(low_b, row['pLeft_coord'])
                 # print(abs(low_b - row['pLeft_coord']) > read_size/2)
                 no_primer.append('-')
                 # print('***')
-                breakpoint()
                 break
             else:
                 # print(i, df.shape[0]-1)
@@ -579,23 +608,29 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                         print('!Problem with left(forward) primer')
                         print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
                         change = input('Where to move (+/-bps):')
+                        if change == 'p':
+                            continue
                         low_b = low_b+int(change)
                         seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
                         print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b-int(change), high_b}')
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
 
                     if abs(high_b - row['pRight_coord']) > read_size/2:
                         right_ok = False
                         print('!Problem with Right(backward) primer')
                         print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp stream)')
                         change = input('Where to move (+/-bps):')
+                        if change == 'p':
+                            continue
                         high_b = high_b+int(change)
                         seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
                         print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size)
+                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
                     no_primer.append('Redesigned')
                 else:
-                    print(f'Primer pair #{i} has alternative binding site')
+                    print('==6')
+                    print(f'Primer pair #{i+1} has alternative binding site')
                     continue
             #Alternative binding check
     return primer_pool, accepted_primers, no_primer
