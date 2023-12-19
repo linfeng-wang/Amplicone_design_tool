@@ -138,7 +138,7 @@ def place_amplicon_search(full_data, target_coverage, read_size, ref_size, outpu
         fig = go.Figure(data=go.Scatter(x=x, y=y, mode='lines'))
 
         # Setting title and labels
-        fig.update_layout(title='Simple Curve Plot',
+        fig.update_layout(title=f'Number of {read_size}bps Amplicon needed for {target_coverage*100}% SNP coverage',
                         xaxis_title='No. of Amplicones',
                         yaxis_title='SNP Coverage (%)')
         fig.add_vline(x=amplicon_number, line_width=3, line_dash="dash", line_color="green")
@@ -156,7 +156,7 @@ def place_amplicon_search(full_data, target_coverage, read_size, ref_size, outpu
 
 #%%
 # def place_amplicon(full_data, read_number, read_size, primer_pool, accepted_primers, no_primer_, ref_genome, graphic_output=False, padding=150, output_path = '.'):
-def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, primer_pool, accepted_primers, no_primer_, padding = 150, graphic_output=False, check_snp=False):
+def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, primer_pool, accepted_primers, no_primer_, padding = 150, graphic_output=False, check_snp=False, redesign_flag=False):
     full_data_cp = full_data.copy()
     read_size = read_size
     window_size = read_size
@@ -174,7 +174,6 @@ def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, prime
     'weight': 'float64'
     }
     covered_positions = pd.DataFrame(columns=dtypes.keys()).astype(dtypes)
-
     # covered_positions = pd.DataFrame(columns = ['genome_pos','weight'])
     run = 0
     coverage_trace = [0]
@@ -185,14 +184,15 @@ def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, prime
         print(f'**Amplicon #{amplicon_number+1}')
         print(f'Designing primers...for {read_size}bps Amplicons...with {padding}bps padding')
         print(f'Current coverage: {round(coverage,1)}%')
-        response = input("Do you want to proceed with further amplicon placement? [Y/n]: ").strip().lower()
-        # Setting default response to 'yes' if the user enters nothing
-        if response == '' or response == 'y':
-            pass
-        else:
-            break
+        if redesign_flag:
+            response = input("!!!There has been previous redesigning going on. Do you want to proceed with further amplicon placement? [Y/n]: ").strip().lower()
+            # Setting default response to 'yes' if the user enters nothing
+            if response == '' or response == 'y':
+                pass
+            else:
+                break
+            print('***')
         amplicon_number += 1
-        print('***')
         
         # print(amplicon_number, coverage)
         start_r = pos[np.argmax(weight_window_sum)] # find the index of the max value in the rolling sum
@@ -207,6 +207,10 @@ def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, prime
         primer_pool, accepted_primers, no_primer = p_s.result_extraction(primer_pool, accepted_primers, seq_template, run+1, padding, ref_genome, high_b, low_b, read_size, full_data_cp, check_snp, freq_cutoff=50000)
         # primer_pool, accepted_primers, no_primer = p_s.result_extraction(primer_pool, accepted_primers, seq_template, run+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, read_size = read_size, priority = full_data_cp, freq_cutoff=50000, check_snp=check_snp)
         no_primer_.extend(no_primer)
+        print(no_primer_)
+
+        # if no_primer[-1] == 'Redesigned':
+        #     redesign_flag = True
         
         if accepted_primers.shape[0] != 0:
             start_p, end_p = accepted_primers.iloc[accepted_primers.shape[0]-1][['pLeft_coord','pRight_coord']].values
@@ -214,10 +218,12 @@ def place_amplicon_spol(full_data, target_coverage, read_size, ref_genome, prime
             run= max(0,run-1)
             print('No suitable primers found')
             break
-
+        
+        print('start_p', 'end_p')
+        print(start_p, end_p)
         # c = full_data_cp.shape[0]
         # full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = full_data_cp['weight'].min()/10/c  # set the weight of the covered positions smaller
-        full_data_cp.loc[(full_data_cp['genome_pos']>=start_p) & (full_data_cp['genome_pos']<=end_p), 'weight'] = 0 # set the weight of the covered positions smaller
+        full_data_cp.loc[(full_data_cp['genome_pos']>=int(start_p)) & (full_data_cp['genome_pos']<=int(end_p)), 'weight'] = 0 # set the weight of the covered positions smaller
 
         if [start_p, end_p] in covered_ranges:
             if pos[np.argmax(weight_window_sum)] == start_r:

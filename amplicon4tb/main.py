@@ -34,6 +34,9 @@ def main(args):
     #test run: python main.py design -op ../test -a 400 -sn 1 -sg rpoB,katG -nn 1
     #test run: python main.py design -op ../test -a 400 -sn  -sg rpoB,katG -nn 35 -sc
     # python main.py design -op ../test -a 400 -sn 1 -sg rpoB,katG -nn 1 -sc
+    # python main.py design -op ../test -a 400 -sn 1 -sg rpoB,katG -nn 1 -sc
+    # python main.py design -op ../test -a 1000 -sn 2 -sg rpoB,katG -nn 15 -sc
+    # python main.py design -op ../test -a 400 -nn 0 -sc
     # Rationale:
     # This program is designed to perform primer design for PCR amplification,
     # taking into consideration various parameters such as amplicon size, SNP priority,
@@ -43,7 +46,7 @@ def main(args):
     # specified folder.
 
     # Displaying the User Settings for Verification:
-    print("========== User Settings ==========")
+    print("========== Design: User Settings ==========")
     print(f"Amplicon Size: {args.amplicon_size}")
     print(f"SNP Priority: {args.snp_priority}")
     print(f"Reference Genome: {args.reference_genome}")
@@ -61,7 +64,7 @@ def main(args):
         print(f"Spoligo Sequencing File: {args.spoligo_sequencing_file}")
     print(f"Output Folder Path: {args.output_folder_path}")
     
-    print("===================================")
+    print("===========================================")
 
     gene_names = [
         "rpoB",
@@ -168,11 +171,14 @@ def main(args):
         non_specific_gene_data_count = accepted_primers.shape[0] - specific_gene_data_count
         
     else:
-        print('=====Non-specific amplicon=====')
-        covered_positions_nosp, covered_ranges_nosp, full_data_cp, primer_pool, accepted_primers, no_primer_ = w.place_amplicon(non_specific_gene_data, non_specific_amplicon, read_size, primer_pool, accepted_primers, no_primer_,ref_genome, args.graphic_option, padding=padding, output_path =output_path)
-        covered_positions = covered_positions_nosp
-        covered_ranges = covered_ranges_nosp
-        non_specific_gene_data_count = accepted_primers.shape[0]
+        if args.non_specific_amplicon_no > 0:
+            print('=====Non-specific amplicon=====')
+            covered_positions_nosp, covered_ranges_nosp, full_data_cp, primer_pool, accepted_primers, no_primer_ = w.place_amplicon(non_specific_gene_data, non_specific_amplicon, read_size, primer_pool, accepted_primers, no_primer_,ref_genome, args.graphic_option, padding=padding, output_path =output_path)
+            covered_positions = covered_positions_nosp
+            covered_ranges = covered_ranges_nosp
+            non_specific_gene_data_count = accepted_primers.shape[0]
+        else:
+            pass
 
     # whether or not you wanna include spoligotyping sequencing
     spoligotype = args.spoligo_coverage
@@ -199,22 +205,25 @@ def main(args):
         spol_data.loc[combined_mask, 'weight'] = 1
         covered_positions_spol, covered_ranges_spol, full_data_cp, primer_pool, accepted_primers, no_primer_ = Amplicon_no.place_amplicon_spol(spol_data, 1, read_size, ref_genome, primer_pool, accepted_primers, no_primer_, padding=padding, graphic_output=False, check_snp=False)
         covered_ranges = covered_ranges + covered_ranges_spol
+        print(covered_ranges)
+        print(covered_ranges_spol)
         # covered_ranges_spol = Amplicon_no.place_amplicon_spol(spol_data, 1, read_size, graphic_output=False, ref_size = w.genome_size(ref_genome))
         # covered_ranges.extend(covered_ranges_spol)
 
     read_number = specific_gene_data_count + non_specific_gene_data_count + len(covered_ranges_spol)
     # output
     primer_label = [f'Gene_specific:{args.specific_amplicon_gene}']*specific_gene_data_count + ['Non_specific']*non_specific_gene_data_count + ['Spoligotype']*len(covered_ranges_spol)
-
     # print(primer_label)
     # print(len(primer_label))
     # print(accepted_primers)
     # print(accepted_primers.shape)
     # print(covered_ranges)
     # print(no_primer_)
-    
+    print(covered_ranges)
+    print(accepted_primers)
+    print(no_primer_)
     accepted_primers['Amplicon_type'] = primer_label
-    accepted_primers['Redesign'] = no_primer_
+    # accepted_primers['Redesign'] = no_primer_
     accepted_primers['Designed_ranges'] = covered_ranges
     accepted_primers.reset_index(inplace = True)
     
@@ -255,20 +264,11 @@ def main(args):
         sp = '-sp'
     else:
         sp = ''
-        
-    def modify_primer_name(primer, amplicon_type):
-        prefix = 'sp' if 'Gene_specific' in amplicon_type else 'ns' if 'Non_specific' in amplicon_type else 'spol' if 'spol' in amplicon_type else ''
-        parts = primer.split('-')
-        if len(parts) > 1:
-            parts[-1] = 'L' + str(int(parts[-1][1:]) + 1)  # Increment the number
-        parts.insert(1, prefix)
-        return '-'.join(parts)
 
     # Apply modifications
-    accepted_primers['pLeft_ID'] = accepted_primers.apply(lambda x: modify_primer_name(x['pLeft_ID'], x['Amplicon_type']), axis=1)
-    accepted_primers['pRight_ID'] = accepted_primers.apply(lambda x: modify_primer_name(x['pRight_ID'], x['Amplicon_type']), axis=1)
-        
-            
+    accepted_primers['pLeft_ID'] = accepted_primers.apply(lambda x: w.modify_primer_name(x['pLeft_ID'], x['Amplicon_type'], 'L'), axis=1)
+    accepted_primers['pRight_ID'] = accepted_primers.apply(lambda x: w.modify_primer_name(x['pRight_ID'], x['Amplicon_type'], 'R'), axis=1)
+
     op = f'{output_path}/Amplicon_design_output'
     os.makedirs(op, exist_ok=True) #output path
     accepted_primers.to_csv(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}{sp}.csv',index=False)
@@ -287,10 +287,7 @@ def main(args):
 
     primer_inclusion.to_csv(f'{op}/SNP_inclusion-{read_number}-{read_size}{sp}.csv',index=False)
 
-    print('Primer design output files:')
-    print(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv')
-    print(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv')
-    
+
     if specific_gene_amplicon>0 or non_specific_amplicon>0:
         # amp_snp = pd.DataFrame(columns=full_data.columns)
         
@@ -313,19 +310,46 @@ def main(args):
                 # Drop columns that are completely empty or all NA from filtered_data
                 filtered_data = filtered_data.dropna(axis=1, how='all')
                 amp_snp = pd.concat([amp_snp, filtered_data])
+            
+            amp_snp = amp_snp.drop_duplicates()
+            
+            full_data_gene = full_data['gene'].value_counts()
+            amp_snp_aligned = amp_snp['gene'].value_counts().reindex(full_data_gene.index).fillna(0)
 
-            gene_coverage = round(amp_snp['gene'].value_counts()/full_data['gene'].value_counts()*100, 1)
+            # Calculate the ratio and format as string
+            result = amp_snp_aligned / full_data_gene
+            formatted_result = result.apply(lambda x: f"{x:.0%}")
 
-            gene_coverage_df = gene_coverage.reset_index().fillna(0)
-            gene_coverage_df.columns = ['Gene', 'SNP_coverage(%)']
+            # Combine the two series
+            combined_series = amp_snp_aligned.astype(str) + "/" + full_data_gene.astype(str) + " (" + formatted_result + ")"
+
+            # print(combined_series)
+
+            # gene_coverage = round(amp_snp['gene'].value_counts()/full_data['gene'].value_counts()*100, 1)
+
+            gene_coverage_df = combined_series.reset_index().fillna(0)
+            gene_coverage_df.columns = ['Gene', 'SNP_coverage']
             
             print(tabulate(gene_coverage_df, headers='keys', tablefmt='grid'))
+
+    print('Primer design output files:')
+    print(f'{op}/SNP_inclusion-{read_number}-{read_size}.csv')
+    print(f'{op}/Primer_design-accepted_primers-{read_number}-{read_size}.csv')
+    
     return 0
 
 def main_amplicon_no(args):
+    print("========== Amplicon Number: User Setting ==========")
+    print(f"Amplicon Size: {args.amplicon_size}")
+    print(f"SNP Priority: {args.snp_priority}")
+    print(f"Reference Genome: {args.reference_genome}")
+    print(f"Target Coverage: {args.target_coverage}")
+    print(f"Graphic Option: {args.graphic_option}")
+    print(f"Output Folder Path: {args.output_folder_path}")
+    print("===================================================")
     # test run: python main.py amplicon_no -s variants.csv -ref MTB-h37rv_asm19595v2-eg18.fa -op ../test -a 400 -c 1 -sp -sp_f spacers.bed
     # test run: python main.py amplicon_no -a 400 -op ../test -g
-    # test run: python main.py amplicon_no -a 400 -sc -op ../test -g
+    # test run: python main.py amplicon_no -a 1000 -op ../test -g
     full_data = pd.read_csv(args.snp_priority)
     full_data = full_data[~full_data['drugs'].isna()]
     full_data = full_data.sort_values(by=['genome_pos'])
@@ -336,14 +360,21 @@ def main_amplicon_no(args):
     read_size = args.amplicon_size
     output_path = args.output_folder_path
     graphics = args.graphic_option
-
     gene_coverage = Amplicon_no.place_amplicon_search(full_data, target_coverage, read_size, w.genome_size(ref_genome),output_path, graphics)
-
     return 0
     
 def main_plotting(args):
     # test run: python main.py plotting -s variants.csv -gff MTB-h37rv_asm19595v2-eg18.gff -ap ../test/Primer_design-accepted_primers-30-400.csv -rp ../test/Primer_design-accepted_primers-30-400.csv -op ../test
-    # test run: python main.py plotting -ap ../test/Amplicon_design_output/Primer_design-accepted_primers-35-400.csv -rp ../db/reference_design.csv -op ../test
+    # test run: python main.py plotting -ap ../test/Amplicon_design_output/Primer_design-accepted_primers-42-400.csv -rp ../db/reference_design.csv -op ../test -r 400
+    # test run: python main.py plotting -ap ../test/Amplicon_design_output/Primer_design-accepted_primers-30-1000.csv -rp ../db/reference_design.csv -op ../test -r 1000
+    print("========== Plotting: User Settings ==========")
+    print(f"SNP Priority: {args.snp_priority}")
+    print(f"Accepted Primers: {args.accepted_primers}")
+    print(f"GFF Feature file: {args.gff_features}")
+    print(f"Reference Design: {args.reference_design}")
+    print(f"Read Size: {args.read_size}")
+    print(f"Output Folder Path: {args.output_folder_path}")
+    print("============================================")
     priority = args.snp_priority
     accepted_primers = args.accepted_primers
     gff = args.gff_features
@@ -428,7 +459,6 @@ if __name__ == "__main__":
     parser_sub.set_defaults(func=main_plotting)
 
     args = parser.parse_args()
-    
     if args.command == 'design':
         main(args)
     if args.command == 'amplicon_no':

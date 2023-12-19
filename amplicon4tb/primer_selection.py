@@ -305,7 +305,7 @@ def check_for_snp(seq, priority, plength, forward, ref_genome, cut_off=50000, sp
         return False
     
 # %%
-def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000):
+def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000, _is_recursive='none'):
     # print([len(sequence)-50,len(sequence)+50])
     # print(len(sequence))
     # size_range = f'{int(len(sequence)-padding*1.3)}-{int(len(sequence)-padding*1)}'
@@ -332,7 +332,7 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 # 'SEQUENCE_EXCLUDED_REGION':[(padding,len(sequence)-padding)]
             },
             global_args={
-                'PRIMER_NUM_RETURN': 15,
+                'PRIMER_NUM_RETURN': 16,
                 # 'PRIMER_OPT_SIZE': 20,
                 'PRIMER_PICK_INTERNAL_OLIGO': 0,
                 'PRIMER_INTERNAL_MAX_SELF_END': 8,
@@ -421,8 +421,9 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
     # tm_params, dg_params = precompute_dinucleotide_params(genome)
     
     if len(primer_pool) == 0:
-        print(f'{df.shape[0]} primers designed')
+        print(f'{df.shape[0]-1} primers designed')
         for i, row in df.iterrows():
+            print(row)
             # print(i, df.shape[0]-1)
             left_ok = True
             right_ok = True
@@ -485,36 +486,66 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
             else:
                 if i == df.shape[0]-1:
                     print(f'!!!No suitable primer found: please manually inspect the sequence')
-                    no_primer.append('Redesigned')
+                    change = input('Continue with redesign and do not skip?(y/n):')
+                    if change == 'y' or '':
+                        print('pass')
 
+                    else:
+                        print('skip')
+                        x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                        accepted_primers.loc[len(accepted_primers)] = x
+                        status = 'Skipped'
+                        no_primer.append(status)
+                        continue
+                    print('pass2')
+                    status = 'Redesigned'
+                    
                     if abs(low_b - row['pLeft_coord']) > read_size/2:
-                        left_ok = False
-                        print('!Problem with left(forward) primer')
-                        print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
-                        change = input('Where to move (+/-bps):')
-                        if change == 'p':
-                            continue
-                        low_b = low_b+int(change)
-                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
-                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} = {low_b-int(change), high_b}')
-                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
+                        print('!Problem with *left(forward)* primer', _is_recursive)
+                        if _is_recursive=='right':
+                            pass
+                        else:
+                            left_ok = False
+                            print('!Problem with *left(forward)* primer')
+                            print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                            change = input('Where to move (+/-bps):')
+                            if change == 'p' or change == 'pass':
+                                x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                                accepted_primers.loc[len(accepted_primers)] = x
+                                status = 'Skipped'
+                                no_primer.append(status)
+                                continue
+                                
+                            else:
+                                seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                                print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} = {low_b-int(change), high_b}')
+                                # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                                primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000, _is_recursive='left')
 
-                    elif abs(high_b - row['pRight_coord']) > read_size/2:
-                        right_ok = False
-                        print('!Problem with Right(backward) primer')
-                        print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp upstream)')
-                        change = input('Where to move (+/-bps):')
-                        if change == 'p':
-                            continue
-                        high_b = high_b+int(change)
-                        seq_template = extract_sequence_from_fasta(low_b, high_b+int(change), padding=0)
-                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
-                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
-                        
+                    if abs(high_b - row['pRight_coord']) > read_size/2:
+                        print('!Problem with *right)* primer', _is_recursive)
+
+                        if _is_recursive=='left':
+                            pass
+                        else:
+                            right_ok = False
+                            print('!Problem with *right(backward)* primer')
+                            print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                            change = input('Where to move (+/-bps):')
+                            if change == 'p' or change == 'pass':
+                                x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                                accepted_primers.loc[len(accepted_primers)] = x
+                                status = 'Skipped'
+                                no_primer.append(status)
+                                continue
+                            else:
+                                high_b = high_b+int(change)
+                                seq_template = extract_sequence_from_fasta(low_b, high_b+int(change), padding=0)
+                                print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
+                                # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                                primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000, _is_recursive='right')
+                                continue
                 else:
-                    print('==3')
                     print(f'Primer pair #{i+1} has alternative binding site')
                     continue
         # print(primer_pool, accepted_primers)
@@ -599,39 +630,75 @@ def result_extraction(primer_pool, accepted_primers, sequence, seq, padding, ref
                 # print('***')
                 break
             else:
-                # print(i, df.shape[0]-1)
                 if i == df.shape[0]-1:
                     print(f'!!!No suitable primer found: please manually inspect the sequence')
-                    # no_primer.append(seq)
-                    no_primer.append('redesigned')
+                    change = input('Continue with redesign and do not skip?(y/n):')
+                    if change == 'y' or '':
+                        print('pass')
+                    else:
+                        
+                        x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                        accepted_primers.loc[len(accepted_primers)] = x
+                        status = 'Skipped'
+                        no_primer.append(status)
+                        continue
+                    print('pass2')
+                    status = 'Redesigned'
 
                     if abs(low_b - row['pLeft_coord']) > read_size/2:
                         left_ok = False
-                        print('!Problem with left(forward) primer')
-                        print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
-                        change = input('Where to move (+/-bps):')
-                        if change == 'p':
-                            continue
-                        low_b = low_b+int(change)
-                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
-                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b-int(change), high_b}')
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
+                        print('!Problem with *left* primer', _is_recursive)
 
+                        if _is_recursive=='right':
+                            pass
+                        else:
+                            print('!Problem with *left(forward)* primer')
+                            print('How should I moved the left range? (e.g. -50 = moving start of covered range 50bp upstream)')
+                            change = input('Where to move (+/-bps):')
+                            # if change == 'p' or change == 'pass':
+                            #     status = 'Passed'
+                            #     pass
+                            # else:
+                            if change == 'p' or '':
+                                x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                                accepted_primers.loc[len(accepted_primers)] = x
+                                status = 'Skipped'
+                                no_primer.append(status)
+                                continue
+                            
+                            
+                            low_b = low_b+int(change)
+                            seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                            print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b-int(change), high_b}')
+                            primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000, _is_recursive='left')
+                        
                     if abs(high_b - row['pRight_coord']) > read_size/2:
+                        print('!Problem with *right)* primer', _is_recursive)
                         right_ok = False
-                        print('!Problem with Right(backward) primer')
-                        print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp stream)')
-                        change = input('Where to move (+/-bps):')
-                        if change == 'p':
-                            continue
-                        high_b = high_b+int(change)
-                        seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
-                        print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
-                        # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
-                        primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000)
-                    no_primer.append('Redesigned')
+                        if _is_recursive=='left':
+                            pass
+                        else:
+                            if change == 'p' or '':
+                                x = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                                accepted_primers.loc[len(accepted_primers)] = x
+                                status = 'Skipped'
+                                no_primer.append(status)
+                                continue
+                            else:
+                                print('!Problem with *Right(backward)* primer')
+                                print('How should I moved the right range? (e.g. -50 = moving start of covered range 50bp stream)')
+                                change = input('Where to move (+/-bps):')
+                                # if change == 'p' or change == 'pass':
+                                #     status = 'Passed'
+                                #     pass
+                                # else:
+                                high_b = high_b+int(change)
+                                seq_template = extract_sequence_from_fasta(low_b, high_b, padding=0)
+                                print(f'Redesigning primers for the new range ({change}bps): {low_b, high_b} instead of {low_b, high_b-int(change)}')
+                                # primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome = ref_genome, high_b = high_b, low_b = low_b, priority=priority, read_size = read_size)
+                                primer_pool, accepted_primers, no_primer = result_extraction(primer_pool, accepted_primers, seq_template, i+1, padding, ref_genome, high_b, low_b, read_size, priority, check_snp, freq_cutoff=50000, _is_recursive='left')
+                                continue
                 else:
-                    print('==6')
                     print(f'Primer pair #{i+1} has alternative binding site')
                     continue
             #Alternative binding check

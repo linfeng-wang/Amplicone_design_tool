@@ -142,7 +142,7 @@ def plotting(priority, read_size, accepted_primers, gff, reference_design, outpu
         })
 
         if len(df) == 0:
-            print(f'---> No SNPs found in: {gene}')
+            # print(f'---> No SNPs found in: {gene}')
             continue
         else:
             # print(f'---> SNPs found in: {gene}')
@@ -232,7 +232,7 @@ def plotting(priority, read_size, accepted_primers, gff, reference_design, outpu
         
 
         # Create the figure and axis
-        fig, ax1 = plt.subplots(figsize=(20, 16), frameon=True, dpi=50)
+        fig, ax1 = plt.subplots(figsize=(30, 26), frameon=True, dpi=15)
 
         # Create the bar chart
         bars = ax1.bar(df['Genomic_Position'], df['SNP_Frequency'], color='b', alpha=0.7)
@@ -324,7 +324,7 @@ def plotting(priority, read_size, accepted_primers, gff, reference_design, outpu
         output_path = f'{output_dir}'
         op = f'{output_path}/Amplicon_coverage_plots/'
         os.makedirs(op, exist_ok=True) #output path
-        fig.savefig(f'{op}/{read_size}bps-amplicon_coverage-{gene}.png', bbox_inches='tight')
+        fig.savefig(f'{op}/{read_size}bps-amplicon_coverage-{gene}.pdf', bbox_inches='tight')
         
         plt.close('all')
     print(f'**Graphic output saved to: {op}')

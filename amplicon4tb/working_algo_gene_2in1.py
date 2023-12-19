@@ -306,3 +306,11 @@ def place_amplicon(full_data, read_number, read_size, primer_pool, accepted_prim
         print(f'Programme ran for {round((end - start)/60,1)} min')
 
     return covered_positions, covered_ranges, full_data_cp, primer_pool, accepted_primers, no_primer_
+
+def modify_primer_name(primer, amplicon_type, L_R):
+    prefix = 'sp' if 'Gene_specific' in amplicon_type else 'ns' if 'Non_specific' in amplicon_type else 'spol' if 'Spoligotype' in amplicon_type else ''
+    parts = primer.split('-')
+    if len(parts) > 1:
+        parts[-1] = L_R + str(int(parts[-1][1:]) + 1)  # Increment the number
+    parts.insert(1, prefix)
+    return '-'.join(parts)
